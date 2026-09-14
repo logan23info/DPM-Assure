@@ -1,4 +1,4 @@
--- Contract for migration 0022. Uses existing seeded fixture conventions from prior DB contract scripts.
+-- Contract for migration 0022. Static invariants avoid fabricating unrelated invalid tenant lineage.
 DO $$ BEGIN
   IF to_regclass('public.evidence_upload_intents') IS NULL THEN
     RAISE EXCEPTION 'evidence_upload_intents table missing';
@@ -8,7 +8,6 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- Static invariants are intentionally verified without weakening runtime RLS fixture isolation.
 DO $$
 DECLARE forced boolean;
 BEGIN
@@ -23,14 +22,13 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid='evidence_upload_intents'::regclass AND tgname='evidence_upload_intents_frozen_guard' AND NOT tgisinternal) THEN
     RAISE EXCEPTION 'frozen engagement guard missing';
   END IF;
-END $$;
-
-DO $$
-BEGIN
-  BEGIN
-    INSERT INTO evidence_upload_intents(id,organization_id,engagement_id,workpaper_id,filename,mime_type,expected_size_bytes,storage_key,created_by,expires_at)
-    VALUES(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'x','text/plain',-1,'x',gen_random_uuid(),now()+interval '10 minutes');
-    RAISE EXCEPTION 'negative expected_size_bytes unexpectedly accepted';
-  EXCEPTION WHEN check_violation OR foreign_key_violation THEN NULL;
-  END;
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid='evidence_upload_intents'::regclass
+      AND contype='c'
+      AND pg_get_constraintdef(oid) ILIKE '%expected_size_bytes%>= 0%'
+  ) THEN
+    RAISE EXCEPTION 'non-negative expected evidence size constraint missing';
+  END IF;
 END $$;
