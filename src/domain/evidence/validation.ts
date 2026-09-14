@@ -1,4 +1,5 @@
 export type GateResult = "PASS" | "FAIL" | "INSUFFICIENT_EVIDENCE";
+export type TestResultStatus = "PASS" | "FAIL" | "INSUFFICIENT_EVIDENCE" | "NOT_APPLICABLE";
 
 export interface EvidenceGateDimensions {
   identity: GateResult;
@@ -68,7 +69,7 @@ export function validateEvidenceRegistration(input: EvidenceRegistrationInput): 
   return { ...input, filename: input.filename.trim(), mimeType: input.mimeType.trim(), storageKey: input.storageKey.trim(), sourceDescription: input.sourceDescription.trim(), sha256: input.sha256.toLowerCase() };
 }
 
-export function assertConclusiveTestAllowed(result: "PASS" | "FAIL" | "NOT_TESTED" | "NOT_APPLICABLE", gate: GateResult | null): void {
+export function assertConclusiveTestAllowed(result: TestResultStatus, gate: GateResult | null): void {
   if ((result === "PASS" || result === "FAIL") && gate !== "PASS") {
     throw new EvidenceValidationError("Conclusive PASS/FAIL test result requires a PASS evidence gate");
   }
