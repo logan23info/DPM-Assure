@@ -34,7 +34,10 @@ CREATE INDEX organization_invitations_org_status_idx
   ON organization_invitations(organization_id,status,expires_at);
 
 ALTER TABLE organization_invitations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE organization_invitations FORCE ROW LEVEL SECURITY;
+-- NO FORCE is intentional: the schema-owner SECURITY DEFINER acceptance function must be able
+-- to inspect a pending invite before the user is a member. Runtime remains a non-owner and is
+-- still subject to RLS for every direct table access.
+ALTER TABLE organization_invitations NO FORCE ROW LEVEL SECURITY;
 CREATE POLICY organization_invitations_tenant_policy ON organization_invitations
   USING (organization_id=app_current_organization_id() AND app_is_current_org_member())
   WITH CHECK (organization_id=app_current_organization_id() AND app_is_current_org_member());
@@ -66,10 +69,7 @@ BEGIN
    FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Invitation not found'; END IF;
   IF v_inv.status <> 'PENDING' THEN RAISE EXCEPTION 'Invitation is not pending'; END IF;
-  IF v_inv.expires_at <= now() THEN
-    UPDATE organization_invitations SET status='EXPIRED' WHERE id=v_inv.id;
-    RAISE EXCEPTION 'Invitation has expired';
-  END IF;
+  IF v_inv.expires_at <= now() THEN RAISE EXCEPTION 'Invitation has expired'; END IF;
   IF lower(v_inv.email) <> lower(v_user.email) THEN
     RAISE EXCEPTION 'Authenticated email does not match invitation';
   END IF;
