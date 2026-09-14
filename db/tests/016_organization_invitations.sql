@@ -12,6 +12,22 @@ INSERT INTO users(id,email,display_name) VALUES
 INSERT INTO memberships(organization_id,user_id,role,status) VALUES
  ('a0000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000001','ORG_ADMIN','ACTIVE');
 
+-- An ORG_ADMIN may provision a global identity for a new invited email, but this must not grant tenant access.
+SELECT set_config('app.user_id','a1000000-0000-0000-0000-000000000001',true);
+SELECT set_config('app.organization_id','a0000000-0000-0000-0000-000000000001',true);
+SELECT provision_invited_identity('new-user@example.test');
+DO $$
+DECLARE v_user_id uuid;
+BEGIN
+  SELECT id INTO v_user_id FROM users WHERE email='new-user@example.test';
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'invited identity was not provisioned'; END IF;
+  IF EXISTS (
+    SELECT 1 FROM memberships
+     WHERE organization_id='a0000000-0000-0000-0000-000000000001'
+       AND user_id=v_user_id
+  ) THEN RAISE EXCEPTION 'identity provisioning must not grant membership'; END IF;
+END $$;
+
 INSERT INTO organization_invitations(id,organization_id,email,role,token_hash,invited_by,expires_at)
 VALUES (
  'a2000000-0000-0000-0000-000000000001',
