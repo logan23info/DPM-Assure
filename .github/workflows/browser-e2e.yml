@@ -152,6 +152,8 @@ jobs:
             ('f3000000-0000-4000-8000-000000000004','f3000000-0000-4000-8000-000000000003','E2E-REQ-1','Preserve evidence integrity','Evidence used for assurance must preserve provenance and integrity.','STANDARD_REQUIREMENT','E2E-1','In-scope privacy assurance activities','Inspect provenance, custody and hash.','Source artifact with verified custody and SHA-256.');
           INSERT INTO controls(id,organization_id,control_key,title,description,control_type,objective,test_procedure,expected_evidence,status) VALUES
             ('f3000000-0000-4000-8000-000000000005','f1000000-0000-4000-8000-000000000001','E2E-CTRL-1','Evidence integrity control','Preserve source-linked evidence and custody history.','AUDIT_CRITERION','Establish reliable assurance evidence.','Inspect source, custody and integrity.','Hashed source artifact.','ACTIVE');
+          INSERT INTO control_requirement_mappings(control_id,requirement_id,relationship,coverage,rationale,source_reference,reviewer_id,reviewed_at,effective_at) VALUES
+            ('f3000000-0000-4000-8000-000000000005','f3000000-0000-4000-8000-000000000004','IMPLEMENTS','FULL','The E2E audit criterion operationalizes the source-backed evidence-integrity requirement.','E2E-OFFICIAL-1:E2E-1','f1000000-0000-4000-8000-000000000015',now(),now());
 
           INSERT INTO auth_sessions(user_id,token_hash,expires_at) VALUES
             ('f1000000-0000-4000-8000-000000000011',encode(digest('e2e-admin-session-token-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours'),
