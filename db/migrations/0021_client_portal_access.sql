@@ -64,5 +64,42 @@ AS $$
   );
 $$;
 
+CREATE OR REPLACE FUNCTION enforce_pbc_client_assignee()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  engagement_org uuid;
+  engagement_client uuid;
+BEGIN
+  IF NEW.assigned_to IS NULL THEN RETURN NEW; END IF;
+
+  SELECT organization_id, client_id INTO engagement_org, engagement_client
+  FROM engagements WHERE id = NEW.engagement_id;
+
+  IF engagement_org IS NULL OR engagement_client IS NULL THEN
+    RAISE EXCEPTION 'PBC engagement not found';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM client_user_access cua
+    JOIN memberships m ON m.organization_id = cua.organization_id AND m.user_id = cua.user_id
+    WHERE cua.organization_id = engagement_org
+      AND cua.client_id = engagement_client
+      AND cua.user_id = NEW.assigned_to
+      AND cua.status = 'ACTIVE'
+      AND m.status = 'ACTIVE'
+      AND m.role = 'CLIENT'
+  ) THEN
+    RAISE EXCEPTION 'PBC assignee must be an active CLIENT user mapped to the engagement client';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER pbc_client_assignee_guard
+BEFORE INSERT OR UPDATE OF engagement_id,assigned_to ON pbc_requests
+FOR EACH ROW EXECUTE FUNCTION enforce_pbc_client_assignee();
+
 COMMENT ON TABLE client_user_access IS 'Explicit client-entity authorization for CLIENT users; organization membership alone never grants portal data access.';
 COMMENT ON FUNCTION app_client_user_can_access(uuid,uuid) IS 'Returns true only for an active CLIENT membership explicitly mapped to the candidate client in the current organization.';
+COMMENT ON FUNCTION enforce_pbc_client_assignee() IS 'Prevents assigning a PBC request to a client user who is not explicitly authorized for the engagement client.';
