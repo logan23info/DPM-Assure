@@ -5,8 +5,8 @@ import { clients, organizations, users } from "./schema";
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true });
 
 /**
- * Typed mirror for privacy operations tables introduced by migration 0013.
- * SQL migrations remain authoritative for RLS, constraints, and tenant integrity.
+ * Typed mirror for privacy operations tables introduced by migrations 0013+.
+ * SQL migrations remain authoritative for RLS, constraints, and workflow gates.
  */
 export const privacyRecordState = pgEnum("privacy_record_state", [
   "DRAFT",
@@ -75,6 +75,9 @@ export const processingActivities = pgTable("processing_activities", {
   securityMeasuresSummary: text("security_measures_summary"),
   state: privacyRecordState("state").notNull().default("DRAFT"),
   ownerUserId: uuid("owner_user_id").references(() => users.id),
+  reviewedBy: uuid("reviewed_by").references(() => users.id),
+  reviewedAt: timestamptz("reviewed_at"),
+  nextReviewAt: timestamptz("next_review_at"),
   createdBy: uuid("created_by").notNull().references(() => users.id),
   createdAt: timestamptz("created_at").notNull().defaultNow(),
   updatedAt: timestamptz("updated_at").notNull().defaultNow(),
@@ -106,6 +109,10 @@ export const processors = pgTable("processors", {
   contractReference: text("contract_reference"),
   dpaReference: text("dpa_reference"),
   securityReviewStatus: text("security_review_status"),
+  dueDiligenceCompletedAt: timestamptz("due_diligence_completed_at"),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  approvedAt: timestamptz("approved_at"),
+  nextReviewAt: timestamptz("next_review_at"),
   ownerUserId: uuid("owner_user_id").references(() => users.id),
   createdBy: uuid("created_by").notNull().references(() => users.id),
   createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -123,6 +130,9 @@ export const internationalTransfers = pgTable("international_transfers", {
   transferRiskAssessmentReference: text("transfer_risk_assessment_reference"),
   supplementaryMeasures: text("supplementary_measures"),
   state: privacyRecordState("state").notNull().default("DRAFT"),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  approvedAt: timestamptz("approved_at"),
+  nextReviewAt: timestamptz("next_review_at"),
   createdBy: uuid("created_by").notNull().references(() => users.id),
   createdAt: timestamptz("created_at").notNull().defaultNow(),
   updatedAt: timestamptz("updated_at").notNull().defaultNow(),
