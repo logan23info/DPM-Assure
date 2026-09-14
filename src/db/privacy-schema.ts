@@ -1,4 +1,4 @@
-import { bigint, boolean, char, jsonb, pgEnum, pgTable, text, timestamp, unique, uuid, integer } from "drizzle-orm/pg-core";
+import { bigint, boolean, char, jsonb, pgEnum, pgTable, text, timestamp, uuid, integer } from "drizzle-orm/pg-core";
 
 import { clients, organizations, users } from "./schema";
 
@@ -6,7 +6,7 @@ const timestamptz = (name: string) => timestamp(name, { withTimezone: true });
 
 /**
  * Typed mirror for privacy operations tables introduced by migrations 0013+.
- * SQL migrations remain authoritative for RLS, constraints, and workflow gates.
+ * SQL migrations remain authoritative for RLS, constraints, workflow gates, and alerts.
  */
 export const privacyRecordState = pgEnum("privacy_record_state", [
   "DRAFT",
@@ -95,6 +95,7 @@ export const dpiaAssessments = pgTable("dpia_assessments", {
   residualRisk: text("residual_risk"),
   approvedBy: uuid("approved_by").references(() => users.id),
   approvedAt: timestamptz("approved_at"),
+  nextReviewAt: timestamptz("next_review_at"),
   createdBy: uuid("created_by").notNull().references(() => users.id),
   createdAt: timestamptz("created_at").notNull().defaultNow(),
 });
@@ -169,6 +170,8 @@ export const privacyBreaches = pgTable("privacy_breaches", {
   containmentSummary: text("containment_summary"),
   notificationRequired: boolean("notification_required"),
   notificationRationale: text("notification_rationale"),
+  notificationDueAt: timestamptz("notification_due_at"),
+  notificationRequirementReference: text("notification_requirement_reference"),
   authorityNotifiedAt: timestamptz("authority_notified_at"),
   subjectsNotifiedAt: timestamptz("subjects_notified_at"),
   ownerUserId: uuid("owner_user_id").references(() => users.id),
