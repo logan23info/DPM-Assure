@@ -3,7 +3,7 @@ import "server-only";
 export interface ObjectMetadata {
   readonly contentType: string;
   readonly contentLength: number;
-  readonly etag?: string;
+  readonly etag?: string | undefined;
 }
 
 export interface PutIntent {
@@ -17,12 +17,12 @@ export interface ObjectStore {
   createPutIntent(input: {
     storageKey: string;
     contentType: string;
-    expiresInSeconds?: number;
+    expiresInSeconds?: number | undefined;
   }): Promise<PutIntent>;
   createDownloadUrl(input: {
     storageKey: string;
-    downloadFilename?: string;
-    expiresInSeconds?: number;
+    downloadFilename?: string | undefined;
+    expiresInSeconds?: number | undefined;
   }): Promise<{ url: string; expiresAt: Date }>;
   getObject(storageKey: string): Promise<{ bytes: Uint8Array; metadata: ObjectMetadata }>;
   deleteObject(storageKey: string): Promise<void>;
