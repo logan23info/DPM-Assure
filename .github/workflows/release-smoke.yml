@@ -1,0 +1,38 @@
+name: Release Smoke
+
+on:
+  push:
+    branches: [main, release-readiness-smoke]
+  pull_request:
+
+jobs:
+  release-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build production application
+        run: npm run build
+      - name: Start standalone server
+        run: |
+          PORT=3000 HOSTNAME=127.0.0.1 node .next/standalone/server.js > /tmp/dpm-assure.log 2>&1 &
+          echo $! > /tmp/dpm-assure.pid
+      - name: Wait for health endpoint
+        run: |
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/dpm-assure.log
+          exit 1
+      - name: Run release smoke contract
+        run: node scripts/release-smoke.mjs
+      - name: Show server logs on failure
+        if: failure()
+        run: cat /tmp/dpm-assure.log || true
