@@ -15,17 +15,17 @@ export interface EvidenceGateDimensions {
 export interface EvidenceRegistrationInput {
   engagementId: string;
   workpaperId: string;
-  procedureId?: string;
-  pbcRequestId?: string;
+  procedureId?: string | undefined;
+  pbcRequestId?: string | undefined;
   filename: string;
   mimeType: string;
   sizeBytes: number;
   storageKey: string;
   sha256: string;
   sourceDescription: string;
-  acquiredAt?: string;
-  periodStart?: string;
-  periodEnd?: string;
+  acquiredAt?: string | undefined;
+  periodStart?: string | undefined;
+  periodEnd?: string | undefined;
 }
 
 export class EvidenceValidationError extends Error {
