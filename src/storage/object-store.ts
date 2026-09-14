@@ -1,5 +1,3 @@
-import "server-only";
-
 export interface ObjectMetadata {
   readonly contentType: string;
   readonly contentLength: number;
