@@ -2,7 +2,7 @@ name: Browser E2E
 
 on:
   push:
-    branches: [main, release-readiness-browser-e2e]
+    branches: [main, release-readiness-browser-e2e, release-readiness-assurance-e2e]
     paths:
       - 'src/**'
       - 'db/**'
@@ -27,6 +27,13 @@ env:
   NEXT_TELEMETRY_DISABLED: '1'
   APP_BASE_URL: http://127.0.0.1:3000
   E2E_BASE_URL: http://127.0.0.1:3000
+  OBJECT_STORE_ENDPOINT: http://127.0.0.1:9000
+  OBJECT_STORE_REGION: us-east-1
+  OBJECT_STORE_FORCE_PATH_STYLE: 'true'
+  OBJECT_STORE_ACCESS_KEY_ID: dpm-e2e
+  OBJECT_STORE_SECRET_ACCESS_KEY: ${{ github.sha }}
+  OBJECT_STORE_BUCKET: dpm-e2e
+  EVIDENCE_MAX_UPLOAD_BYTES: '5242880'
 
 jobs:
   browser-e2e:
@@ -64,6 +71,32 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Start private S3-compatible evidence store
+        run: |
+          set -euo pipefail
+          docker run -d --name dpm-minio -p 9000:9000 \
+            -e MINIO_ROOT_USER="$OBJECT_STORE_ACCESS_KEY_ID" \
+            -e MINIO_ROOT_PASSWORD="$OBJECT_STORE_SECRET_ACCESS_KEY" \
+            minio/minio server /data
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null
+          node --input-type=module <<'NODE'
+          import { CreateBucketCommand, S3Client } from '@aws-sdk/client-s3';
+          const s3 = new S3Client({
+            endpoint: process.env.OBJECT_STORE_ENDPOINT,
+            region: process.env.OBJECT_STORE_REGION,
+            forcePathStyle: true,
+            credentials: {
+              accessKeyId: process.env.OBJECT_STORE_ACCESS_KEY_ID,
+              secretAccessKey: process.env.OBJECT_STORE_SECRET_ACCESS_KEY,
+            },
+          });
+          await s3.send(new CreateBucketCommand({ Bucket: process.env.OBJECT_STORE_BUCKET }));
+          NODE
+
       - name: Apply migrations
         env:
           PGHOST: localhost
@@ -93,16 +126,39 @@ jobs:
           INSERT INTO users(id,email,display_name,status) VALUES
             ('f1000000-0000-4000-8000-000000000011','e2e-admin@example.test','E2E Admin','ACTIVE'),
             ('f1000000-0000-4000-8000-000000000012','e2e-client@example.test','E2E Client','ACTIVE'),
-            ('f1000000-0000-4000-8000-000000000013','e2e-other@example.test','E2E Other','ACTIVE');
+            ('f1000000-0000-4000-8000-000000000013','e2e-other@example.test','E2E Other','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000014','e2e-manager@example.test','E2E Audit Manager','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000015','e2e-reviewer@example.test','E2E Reviewer','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000016','e2e-pbc-client@example.test','E2E PBC Client','ACTIVE');
 
           INSERT INTO memberships(organization_id,user_id,role,status) VALUES
             ('f1000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000011','ORG_ADMIN','ACTIVE'),
             ('f1000000-0000-4000-8000-000000000003','f1000000-0000-4000-8000-000000000012','CLIENT','ACTIVE'),
-            ('f1000000-0000-4000-8000-000000000002','f1000000-0000-4000-8000-000000000013','ORG_ADMIN','ACTIVE');
+            ('f1000000-0000-4000-8000-000000000002','f1000000-0000-4000-8000-000000000013','ORG_ADMIN','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000014','AUDIT_MANAGER','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000015','REVIEWER','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000016','CLIENT','ACTIVE');
+
+          INSERT INTO clients(id,organization_id,name,status) VALUES
+            ('f2000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000001','E2E Assurance Client','ACTIVE');
+
+          INSERT INTO sources(id,source_id,authority,type,title,status,source_url,validated_by,last_validated_at,intended_use) VALUES
+            ('f3000000-0000-4000-8000-000000000001','E2E-OFFICIAL-1','E2E Official Authority','OFFICIAL_STANDARD','E2E Official Privacy Requirement','ACTIVE','https://example.test/official-source','f1000000-0000-4000-8000-000000000011',now(),'Browser release verification only');
+          INSERT INTO frameworks(id,framework_key,name,authority,status) VALUES
+            ('f3000000-0000-4000-8000-000000000002','E2E-FRAMEWORK','E2E Source-backed Framework','E2E Official Authority','ACTIVE');
+          INSERT INTO framework_versions(id,framework_id,version,status,source_id,source_url,validated_by,validated_at) VALUES
+            ('f3000000-0000-4000-8000-000000000003','f3000000-0000-4000-8000-000000000002','1.0','ACTIVE','f3000000-0000-4000-8000-000000000001','https://example.test/official-source','f1000000-0000-4000-8000-000000000011',now());
+          INSERT INTO requirements(id,framework_version_id,requirement_key,title,description,classification,section_reference,applicability,test_procedure,expected_evidence) VALUES
+            ('f3000000-0000-4000-8000-000000000004','f3000000-0000-4000-8000-000000000003','E2E-REQ-1','Preserve evidence integrity','Evidence used for assurance must preserve provenance and integrity.','STANDARD_REQUIREMENT','E2E-1','In-scope privacy assurance activities','Inspect provenance, custody and hash.','Source artifact with verified custody and SHA-256.');
+          INSERT INTO controls(id,organization_id,control_key,title,description,control_type,objective,test_procedure,expected_evidence,status) VALUES
+            ('f3000000-0000-4000-8000-000000000005','f1000000-0000-4000-8000-000000000001','E2E-CTRL-1','Evidence integrity control','Preserve source-linked evidence and custody history.','AUDIT_CRITERION','Establish reliable assurance evidence.','Inspect source, custody and integrity.','Hashed source artifact.','ACTIVE');
 
           INSERT INTO auth_sessions(user_id,token_hash,expires_at) VALUES
             ('f1000000-0000-4000-8000-000000000011',encode(digest('e2e-admin-session-token-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours'),
-            ('f1000000-0000-4000-8000-000000000012',encode(digest('e2e-client-session-token-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours');
+            ('f1000000-0000-4000-8000-000000000012',encode(digest('e2e-client-session-token-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours'),
+            ('f1000000-0000-4000-8000-000000000011',encode(digest('e2e-lifecycle-admin-session-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours'),
+            ('f1000000-0000-4000-8000-000000000015',encode(digest('e2e-lifecycle-reviewer-session-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours'),
+            ('f1000000-0000-4000-8000-000000000016',encode(digest('e2e-lifecycle-client-session-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours');
 
           INSERT INTO auth_login_tokens(email,token_hash,expires_at) VALUES
             ('e2e-admin@example.test',encode(digest('e2e-magic-link-token-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '1 hour');
