@@ -34,13 +34,49 @@ CREATE INDEX organization_invitations_org_status_idx
   ON organization_invitations(organization_id,status,expires_at);
 
 ALTER TABLE organization_invitations ENABLE ROW LEVEL SECURITY;
--- NO FORCE is intentional: the schema-owner SECURITY DEFINER acceptance function must be able
--- to inspect a pending invite before the user is a member. Runtime remains a non-owner and is
--- still subject to RLS for every direct table access.
+-- NO FORCE is intentional: schema-owner SECURITY DEFINER functions must inspect an invitation
+-- before the invitee is a tenant member. Runtime remains a non-owner and direct access is RLS-bound.
 ALTER TABLE organization_invitations NO FORCE ROW LEVEL SECURITY;
 CREATE POLICY organization_invitations_tenant_policy ON organization_invitations
   USING (organization_id=app_current_organization_id() AND app_is_current_org_member())
   WITH CHECK (organization_id=app_current_organization_id() AND app_is_current_org_member());
+
+CREATE OR REPLACE FUNCTION provision_invited_identity(p_email text)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path=public
+AS $$
+DECLARE
+  v_actor uuid := app_current_user_id();
+  v_org uuid := app_current_organization_id();
+  v_user users%ROWTYPE;
+  v_new_id uuid;
+BEGIN
+  IF v_actor IS NULL OR v_org IS NULL OR NOT app_is_current_org_member() THEN
+    RAISE EXCEPTION 'Active organization membership is required';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM memberships m
+     WHERE m.organization_id=v_org AND m.user_id=v_actor
+       AND m.status='ACTIVE' AND m.role IN ('ORG_ADMIN','SUPER_ADMIN')
+  ) THEN
+    RAISE EXCEPTION 'Organization administration permission is required';
+  END IF;
+
+  SELECT * INTO v_user FROM users WHERE lower(email)=lower(p_email) LIMIT 1;
+  IF FOUND THEN
+    IF v_user.status <> 'ACTIVE' THEN
+      RAISE EXCEPTION 'Existing identity is inactive and cannot be invited automatically';
+    END IF;
+    RETURN v_user.id;
+  END IF;
+
+  INSERT INTO users(email,display_name,status)
+  VALUES (lower(btrim(p_email)), split_part(lower(btrim(p_email)),'@',1), 'ACTIVE')
+  RETURNING id INTO v_new_id;
+  RETURN v_new_id;
+END $$;
 
 CREATE OR REPLACE FUNCTION accept_organization_invitation(p_token_hash char(64))
 RETURNS uuid
@@ -134,4 +170,5 @@ BEFORE UPDATE OF role,status ON memberships
 FOR EACH ROW EXECUTE FUNCTION enforce_membership_admin_safety();
 
 COMMENT ON TABLE organization_invitations IS 'Time-bounded, single-use organization membership invitations. Invitation is not membership.';
+COMMENT ON FUNCTION provision_invited_identity(text) IS 'Provisions a global active identity for a new invited email without granting organization membership. Existing inactive identities require trusted administrative review.';
 COMMENT ON FUNCTION accept_organization_invitation(char(64)) IS 'Accepts an invitation only when transaction-local authenticated user/org context matches the invited email and organization.';
