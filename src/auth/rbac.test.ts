@@ -29,13 +29,24 @@ test("reviewers can approve workpapers but cannot create them", () => {
   assert.equal(hasPermission("REVIEWER", permissions.workpaperCreate), false);
 });
 
+test("final assurance permissions preserve segregation of duties", () => {
+  assert.equal(hasPermission("AUDIT_MANAGER", permissions.engagementSignoff), true);
+  assert.equal(hasPermission("AUDIT_MANAGER", permissions.engagementFreeze), true);
+  assert.equal(hasPermission("REVIEWER", permissions.engagementSignoff), true);
+  assert.equal(hasPermission("REVIEWER", permissions.engagementFreeze), false);
+  assert.equal(hasPermission("LEAD_AUDITOR", permissions.engagementSignoff), false);
+  assert.equal(hasPermission("AUDITOR", permissions.engagementSignoff), false);
+});
+
 test("client access cannot create findings or approve reports", () => {
   assert.equal(hasPermission("CLIENT", permissions.findingCreate), false);
   assert.equal(hasPermission("CLIENT", permissions.reportApprove), false);
+  assert.equal(hasPermission("CLIENT", permissions.engagementFreeze), false);
 });
 
 test("viewer is read-only across assurance records", () => {
   assert.equal(hasPermission("VIEWER", permissions.engagementRead), true);
   assert.equal(hasPermission("VIEWER", permissions.engagementUpdate), false);
   assert.equal(hasPermission("VIEWER", permissions.evidenceUpload), false);
+  assert.equal(hasPermission("VIEWER", permissions.engagementSignoff), false);
 });
