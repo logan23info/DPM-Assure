@@ -72,20 +72,25 @@ test("CLIENT sees only restricted client workflow entry points", async ({ contex
   await expect(page).toHaveURL(new RegExp(`/organizations/${ORG_CLIENT}/client-portal$`));
 });
 
-test("logout revokes the active server session", async ({ request }) => {
-  const cookie = `dpm_session=${ADMIN_SESSION}`;
-  const logout = await request.post("/api/auth/logout", {
-    headers: {
-      cookie,
-      origin: BASE_URL,
-      "sec-fetch-site": "same-origin",
-    },
-    maxRedirects: 0,
-  });
-  expect([302, 303, 307, 308]).toContain(logout.status());
+test("logout revokes the active server session", async ({ context, page, request }) => {
+  await setSession(context, ADMIN_SESSION);
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: "Assurance workspace" })).toBeVisible();
 
+  const status = await page.evaluate(async () => {
+    const response = await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      redirect: "manual",
+    });
+    return response.status;
+  });
+  expect(status).toBe(204);
+
+  // Reuse the original raw token explicitly. If logout revoked the server session,
+  // it must no longer authenticate even though the request still presents it.
   const dashboard = await request.get("/dashboard", {
-    headers: { cookie },
+    headers: { cookie: `dpm_session=${ADMIN_SESSION}` },
     maxRedirects: 0,
   });
   expect([302, 303, 307, 308]).toContain(dashboard.status());
