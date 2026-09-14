@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { AuthorizedTenantTransaction } from "@/auth/authorize";
 import { permissions, requirePermission } from "@/auth/rbac";
-import { engagementFrameworks, engagements, scopes } from "@/db/schema";
+import { engagements } from "@/db/schema";
 import { recordDomainChange } from "@/domain/record-event";
 import {
   validateApplicabilityDecision,
@@ -24,9 +24,13 @@ async function requirePlanning(transaction: AuthorizedTenantTransaction, engagem
 export async function selectEngagementFramework(transaction: AuthorizedTenantTransaction, input: SelectFrameworkInput) {
   requirePermission(transaction.membership.role, permissions.engagementGovernanceManage);
   const validated = validateSelectFramework(input); await requirePlanning(transaction, validated.engagementId);
-  const [created] = await transaction.db.insert(engagementFrameworks).values({ engagementId: validated.engagementId, frameworkVersionId: validated.frameworkVersionId, applicabilityStatus: "SELECTED", reviewedBy: transaction.principal.userId, reviewedAt: new Date() }).onConflictDoNothing().returning();
-  if (!created) throw new Error("Framework version is already selected");
-  await transaction.db.execute(sql`update engagement_frameworks set organization_id=${transaction.context.organizationId}::uuid, selected_by=${transaction.principal.userId}::uuid where id=${created.id}::uuid`);
+  const result = await transaction.db.execute<{ id: string }>(sql`
+    insert into engagement_frameworks (engagement_id, framework_version_id, applicability_status, reviewed_by, reviewed_at, organization_id, selected_by)
+    values (${validated.engagementId}::uuid, ${validated.frameworkVersionId}::uuid, 'SELECTED', ${transaction.principal.userId}::uuid, now(), ${transaction.context.organizationId}::uuid, ${transaction.principal.userId}::uuid)
+    on conflict (engagement_id, framework_version_id) do nothing
+    returning id
+  `);
+  const created = result.rows[0]; if (!created) throw new Error("Framework version is already selected");
   await recordDomainChange(transaction, { eventType: "engagement.framework.selected", aggregateType: "engagement", aggregateId: validated.engagementId, action: "engagement.framework.select", entityType: "engagement_framework", entityId: created.id, payload: { frameworkVersionId: validated.frameworkVersionId }, newValues: { frameworkVersionId: validated.frameworkVersionId } });
   return created;
 }
@@ -34,9 +38,12 @@ export async function selectEngagementFramework(transaction: AuthorizedTenantTra
 export async function defineEngagementScope(transaction: AuthorizedTenantTransaction, input: DefineScopeInput) {
   requirePermission(transaction.membership.role, permissions.engagementGovernanceManage);
   const validated = validateDefineScope(input); await requirePlanning(transaction, validated.engagementId);
-  const [created] = await transaction.db.insert(scopes).values({ engagementId: validated.engagementId, name: validated.name, description: validated.description, inScope: validated.inScope, owner: transaction.principal.userId }).returning();
-  if (!created) throw new Error("Scope write failed");
-  await transaction.db.execute(sql`update scopes set organization_id=${transaction.context.organizationId}::uuid, scope_type=${validated.scopeType}, rationale=${validated.rationale} where id=${created.id}::uuid`);
+  const result = await transaction.db.execute<{ id: string }>(sql`
+    insert into scopes (engagement_id, name, description, in_scope, owner, organization_id, scope_type, rationale)
+    values (${validated.engagementId}::uuid, ${validated.name}, ${validated.description}, ${validated.inScope}, ${transaction.principal.userId}, ${transaction.context.organizationId}::uuid, ${validated.scopeType}, ${validated.rationale})
+    returning id
+  `);
+  const created = result.rows[0]; if (!created) throw new Error("Scope write failed");
   await recordDomainChange(transaction, { eventType: "engagement.scope.defined", aggregateType: "engagement", aggregateId: validated.engagementId, action: "engagement.scope.define", entityType: "scope", entityId: created.id, payload: { name: validated.name, scopeType: validated.scopeType, inScope: validated.inScope }, newValues: { name: validated.name, scopeType: validated.scopeType, inScope: validated.inScope, rationale: validated.rationale } });
   return created;
 }
