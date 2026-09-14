@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function HomePage() {
   return (
     <main className="shell">
@@ -9,6 +11,9 @@ export default function HomePage() {
           sources, deterministic controls, evidence gates, human review, and
           immutable audit history.
         </p>
+        <div className="auth-actions">
+          <Link className="primary-link" href="/login">Secure sign in</Link>
+        </div>
         <div className="status-grid" aria-label="Foundation status">
           <article>
             <strong>Compliance Truth</strong>
