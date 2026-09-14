@@ -20,7 +20,7 @@ import {
 } from "@/domain/compliance/monitoring-service";
 
 export type MonitoringCommand =
-  | { action: "refresh"; asOf?: string }
+  | { action: "refresh"; asOf?: string | undefined }
   | { action: "acknowledge_alert"; alertId: string }
   | { action: "resolve_alert"; alertId: string }
   | { action: "assess_source_impact"; impactId: string; rationale: string }
