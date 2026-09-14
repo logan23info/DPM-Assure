@@ -9,6 +9,7 @@ export default defineConfig({
     "./src/db/privacy-assurance-schema.ts",
     "./src/db/obligation-schema.ts",
     "./src/db/compliance-monitoring-schema.ts",
+    "./src/db/onboarding-schema.ts",
   ],
   out: "./drizzle",
   dialect: "postgresql",
