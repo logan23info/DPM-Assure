@@ -1,0 +1,121 @@
+name: Recovery Contract
+
+on:
+  push:
+    branches: [main, release-readiness-browser-e2e]
+    paths:
+      - 'db/**'
+      - '.github/workflows/recovery-contract.yml'
+  pull_request:
+    paths:
+      - 'db/**'
+      - '.github/workflows/recovery-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  database-recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: dpm_recovery_source
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d dpm_recovery_source"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply canonical migrations to source database
+        env:
+          PGDATABASE: dpm_recovery_source
+        run: |
+          set -euo pipefail
+          for migration in db/migrations/*.sql; do
+            echo "Applying ${migration}"
+            psql -v ON_ERROR_STOP=1 -f "${migration}"
+          done
+
+      - name: Seed recovery sentinel records
+        env:
+          PGDATABASE: dpm_recovery_source
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO organizations(id,name,slug,status)
+          VALUES ('fa000000-0000-4000-8000-000000000001','Recovery Sentinel','recovery-sentinel','ACTIVE');
+          INSERT INTO users(id,email,display_name,status)
+          VALUES ('fa000000-0000-4000-8000-000000000011','recovery@example.test','Recovery User','ACTIVE');
+          INSERT INTO memberships(organization_id,user_id,role,status)
+          VALUES ('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000011','ORG_ADMIN','ACTIVE');
+          SQL
+
+      - name: Create logical backup
+        env:
+          PGDATABASE: dpm_recovery_source
+        run: pg_dump --format=custom --no-owner --no-privileges --file=/tmp/dpm-assure.dump
+
+      - name: Restore backup into clean database
+        run: |
+          createdb dpm_recovery_restored
+          pg_restore --exit-on-error --no-owner --no-privileges --dbname=dpm_recovery_restored /tmp/dpm-assure.dump
+
+      - name: Verify restored sentinel and security primitives
+        env:
+          PGDATABASE: dpm_recovery_restored
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM organizations WHERE slug='recovery-sentinel') THEN
+              RAISE EXCEPTION 'restored database is missing recovery sentinel organization';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname='app_current_user_id') THEN
+              RAISE EXCEPTION 'tenant RLS helper missing after restore';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname='auth_resolve_session') THEN
+              RAISE EXCEPTION 'authentication bootstrap helper missing after restore';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='audit_logs_append_only' AND NOT tgisinternal) THEN
+              RAISE EXCEPTION 'append-only audit log trigger missing after restore';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='audit_freezes_append_only' AND NOT tgisinternal) THEN
+              RAISE EXCEPTION 'audit freeze immutability trigger missing after restore';
+            END IF;
+          END $$;
+          SQL
+
+      - name: Run behavioral database contracts against restored database
+        env:
+          PGDATABASE: dpm_recovery_restored
+        run: |
+          set -euo pipefail
+          for test_file in db/tests/*.sql; do
+            echo "Running ${test_file}"
+            psql -v ON_ERROR_STOP=1 -f "${test_file}"
+          done
+
+      - name: Prove deterministic migrations on a fresh recovery database
+        run: |
+          createdb dpm_recovery_fresh
+          export PGDATABASE=dpm_recovery_fresh
+          set -euo pipefail
+          for migration in db/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "${migration}"
+          done
