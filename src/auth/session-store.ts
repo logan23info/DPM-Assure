@@ -47,7 +47,7 @@ export async function issueLoginToken(
   if (Number(rate.rows[0]?.request_count ?? "0") >= MAX_LOGIN_REQUESTS_PER_WINDOW) return null;
 
   const user = await getPool().query<{ email: string }>(
-    "select email from users where lower(email)=lower($1) and status='ACTIVE' limit 1",
+    "select email from auth_active_user_by_email($1)",
     [normalized],
   );
 
@@ -80,11 +80,11 @@ export async function consumeLoginTokenAndCreateSession(
     const email = consumed.rows[0]?.email;
     if (!email) throw new Error("Invalid login token");
 
-    const user = await client.query<{ id: string }>(
-      "select id from users where lower(email)=lower($1) and status='ACTIVE' limit 1",
+    const user = await client.query<{ user_id: string }>(
+      "select user_id from auth_active_user_by_email($1)",
       [email],
     );
-    const userId = user.rows[0]?.id;
+    const userId = user.rows[0]?.user_id;
     if (!userId) throw new Error("Authenticated user is inactive or missing");
 
     const sessionToken = opaqueToken();
