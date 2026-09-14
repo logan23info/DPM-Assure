@@ -66,15 +66,22 @@ jobs:
           VALUES ('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000011','ORG_ADMIN','ACTIVE');
           SQL
 
-      - name: Create logical backup
-        env:
-          PGDATABASE: dpm_recovery_source
-        run: pg_dump --format=custom --no-owner --no-privileges --file=/tmp/dpm-assure.dump
+      - name: Create PostgreSQL 17 logical backup
+        run: |
+          set -euo pipefail
+          container_id="$(docker ps --filter ancestor=postgres:17-alpine --format '{{.ID}}' | head -n 1)"
+          test -n "$container_id"
+          docker exec "$container_id" pg_dump \
+            -U postgres \
+            --no-owner \
+            --no-privileges \
+            dpm_recovery_source > /tmp/dpm-assure.sql
+          test -s /tmp/dpm-assure.sql
 
       - name: Restore backup into clean database
         run: |
           createdb dpm_recovery_restored
-          pg_restore --exit-on-error --no-owner --no-privileges --dbname=dpm_recovery_restored /tmp/dpm-assure.dump
+          psql -v ON_ERROR_STOP=1 -d dpm_recovery_restored -f /tmp/dpm-assure.sql
 
       - name: Verify restored sentinel and security primitives
         env:
