@@ -63,7 +63,7 @@ jobs:
       - name: Prove RLS is fail-closed without tenant context
         run: |
           set -euo pipefail
-          count="$(psql -At -v ON_ERROR_STOP=1 -c "SET ROLE dpm_runtime; SELECT count(*) FROM organizations;")"
+          count="$(psql -At -v ON_ERROR_STOP=1 -c "SET ROLE dpm_runtime; SELECT count(*) FROM organizations;" | tail -n 1)"
           test "$count" = "0"
 
       - name: Prove runtime cannot create schema objects
