@@ -23,8 +23,8 @@ INSERT INTO clients(id,organization_id,name) VALUES
 INSERT INTO client_user_access(organization_id,client_id,user_id,granted_by)
 VALUES ('a0000000-0000-0000-0000-000000000001','a2000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000003');
 
-PERFORM set_config('app.user_id','a1000000-0000-0000-0000-000000000001',true);
-PERFORM set_config('app.organization_id','a0000000-0000-0000-0000-000000000001',true);
+SELECT set_config('app.user_id','a1000000-0000-0000-0000-000000000001',true);
+SELECT set_config('app.organization_id','a0000000-0000-0000-0000-000000000001',true);
 
 DO $$ BEGIN
   IF NOT app_client_user_can_access('a2000000-0000-0000-0000-000000000001'::uuid) THEN RAISE EXCEPTION 'mapped CLIENT should access Client A'; END IF;
