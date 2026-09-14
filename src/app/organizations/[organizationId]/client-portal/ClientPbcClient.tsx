@@ -1,0 +1,9 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+type RequestItem={id:string;title:string;description:string|null;status:string;dueAt:string|null;expectedEvidence:string|null;engagementName:string;clientName:string;responses:number};
+export function ClientPbcClient({organizationId,requests}:{organizationId:string;requests:RequestItem[]}){const router=useRouter();const[msg,setMsg]=useState<string|null>(null);const[busy,setBusy]=useState(false);async function respond(pbcRequestId:string,responseText:string){setBusy(true);setMsg(null);const r=await fetch(`/api/organizations/${organizationId}/client-portal`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({pbcRequestId,responseText})});const b=await r.json();setBusy(false);if(!r.ok){setMsg(b.message??"Response rejected");return;}setMsg("Response submitted and recorded in the audit trail.");router.refresh();}
+ return <>{msg&&<p className="form-message">{msg}</p>}<div className="signal-list">{requests.map(request=><article className="signal-card" key={request.id}><div className="signal-meta"><span>{request.status}</span><span>{request.dueAt?`Due ${new Date(request.dueAt).toLocaleString()}`:"No due date"}</span></div><h3>{request.title}</h3><p>{request.description??"No additional description"}</p><p><strong>Expected evidence:</strong> {request.expectedEvidence??"Not specified"}</p><small>{request.clientName} · {request.engagementName} · {request.responses} response(s)</small><form className="auth-form" onSubmit={e=>{e.preventDefault();const d=new FormData(e.currentTarget);void respond(request.id,String(d.get("responseText")??""));}}><textarea name="responseText" required placeholder="Response, availability details, questions, or evidence context"/><button disabled={busy||["CLOSED","CANCELLED"].includes(request.status)}>Submit response</button></form></article>)}</div></>;
+}
