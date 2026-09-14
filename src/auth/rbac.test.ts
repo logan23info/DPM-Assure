@@ -38,10 +38,28 @@ test("final assurance permissions preserve segregation of duties", () => {
   assert.equal(hasPermission("AUDITOR", permissions.engagementSignoff), false);
 });
 
+test("privacy operations mutations are restricted to organization administration", () => {
+  assert.equal(hasPermission("ORG_ADMIN", permissions.privacyManage), true);
+  assert.equal(hasPermission("ORG_ADMIN", permissions.privacyApprove), true);
+  assert.equal(hasPermission("ORG_ADMIN", permissions.privacyDsrManage), true);
+  assert.equal(hasPermission("ORG_ADMIN", permissions.privacyBreachManage), true);
+  assert.equal(hasPermission("AUDIT_MANAGER", permissions.privacyManage), false);
+  assert.equal(hasPermission("AUDITOR", permissions.privacyManage), false);
+  assert.equal(hasPermission("REVIEWER", permissions.privacyApprove), false);
+});
+
+test("assurance roles may read privacy operations without mutating them", () => {
+  assert.equal(hasPermission("AUDIT_MANAGER", permissions.privacyRead), true);
+  assert.equal(hasPermission("LEAD_AUDITOR", permissions.privacyRead), true);
+  assert.equal(hasPermission("AUDITOR", permissions.privacyRead), true);
+  assert.equal(hasPermission("REVIEWER", permissions.privacyRead), true);
+});
+
 test("client access cannot create findings or approve reports", () => {
   assert.equal(hasPermission("CLIENT", permissions.findingCreate), false);
   assert.equal(hasPermission("CLIENT", permissions.reportApprove), false);
   assert.equal(hasPermission("CLIENT", permissions.engagementFreeze), false);
+  assert.equal(hasPermission("CLIENT", permissions.privacyRead), false);
 });
 
 test("viewer is read-only across assurance records", () => {
@@ -49,4 +67,5 @@ test("viewer is read-only across assurance records", () => {
   assert.equal(hasPermission("VIEWER", permissions.engagementUpdate), false);
   assert.equal(hasPermission("VIEWER", permissions.evidenceUpload), false);
   assert.equal(hasPermission("VIEWER", permissions.engagementSignoff), false);
+  assert.equal(hasPermission("VIEWER", permissions.privacyRead), false);
 });
