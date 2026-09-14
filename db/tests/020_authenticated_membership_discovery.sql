@@ -17,6 +17,26 @@ VALUES
  ('f0000000-0000-4000-8000-000000000001','f0000000-0000-4000-8000-000000000011','ORG_ADMIN','ACTIVE'),
  ('f0000000-0000-4000-8000-000000000002','f0000000-0000-4000-8000-000000000012','VIEWER','ACTIVE');
 
+INSERT INTO auth_sessions(id,user_id,token_hash,expires_at)
+VALUES(
+ 'f0000000-0000-4000-8000-000000000021',
+ 'f0000000-0000-4000-8000-000000000011',
+ encode(digest('membership-bootstrap-session-token-abcdefghijklmnopqrstuvwxyz','sha256'),'hex'),
+ now()+interval '1 hour'
+);
+
+DO $$
+DECLARE c integer;
+BEGIN
+  SELECT count(*) INTO c
+  FROM auth_resolve_session(encode(digest('membership-bootstrap-session-token-abcdefghijklmnopqrstuvwxyz','sha256'),'hex')::char(64));
+  IF c <> 1 THEN RAISE EXCEPTION 'expected valid session bootstrap row, got %', c; END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM auth_resolve_session(repeat('0',64)::char(64))
+  ) THEN RAISE EXCEPTION 'unknown session hash must not resolve'; END IF;
+END $$;
+
 SELECT set_config('app.user_id','f0000000-0000-4000-8000-000000000011',true);
 
 DO $$
