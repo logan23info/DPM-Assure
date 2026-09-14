@@ -1,0 +1,6 @@
+[
+  {"requirement_id":"DPDP-R-001","framework_id":"INDIA-DPDP","title":"Personal data processing must have a permitted legal basis under the applicable DPDP regime","classification":"LEGAL_REQUIREMENT","status":"RESEARCH_BASELINE","source_reference":"INDIA-DPDP-RULES-2025"},
+  {"requirement_id":"NIST-PF-R-001","framework_id":"NIST-PF","title":"Privacy risk management activities are organized through the Privacy Framework functions and categories","classification":"STANDARD_REQUIREMENT","status":"RESEARCH_BASELINE","source_reference":"NIST-PF-1.0"},
+  {"requirement_id":"ISO27701-R-001","framework_id":"ISO-27701","title":"Privacy information management requirements and controls must be assessed against the applicable edition","classification":"STANDARD_REQUIREMENT","status":"RESEARCH_BASELINE","source_reference":"ISO-27701-2025"},
+  {"requirement_id":"ASVS-R-001","framework_id":"OWASP-ASVS","title":"Application security verification requirements must be evaluated against the selected ASVS level","classification":"AUDIT_CRITERION","status":"RESEARCH_BASELINE","source_reference":"OWASP-ASVS-5.0.0"}
+]
