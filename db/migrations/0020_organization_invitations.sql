@@ -76,6 +76,14 @@ BEGIN
   IF v_inv.role='SUPER_ADMIN' THEN
     RAISE EXCEPTION 'SUPER_ADMIN cannot be granted through organization invitation';
   END IF;
+  IF EXISTS (
+    SELECT 1 FROM memberships m
+     WHERE m.organization_id=v_inv.organization_id
+       AND m.user_id=v_user.id
+       AND m.status='ACTIVE'
+  ) THEN
+    RAISE EXCEPTION 'User is already an active organization member';
+  END IF;
 
   INSERT INTO memberships(organization_id,user_id,role,status)
   VALUES (v_inv.organization_id,v_user.id,v_inv.role,'ACTIVE')
