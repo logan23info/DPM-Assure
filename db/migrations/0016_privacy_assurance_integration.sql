@@ -21,7 +21,7 @@ CREATE TABLE privacy_assurance_candidates (
   decided_at timestamptz,
   decision_rationale text,
   scope_id uuid,
-  pbc_request_id uuid,
+  pbc_request_id uuid REFERENCES pbc_requests(id),
   CONSTRAINT privacy_assurance_candidates_engagement_tenant_fk FOREIGN KEY (engagement_id, organization_id) REFERENCES engagements(id, organization_id),
   CONSTRAINT privacy_assurance_candidates_scope_fk FOREIGN KEY (scope_id, organization_id) REFERENCES scopes(id, organization_id),
   CONSTRAINT privacy_assurance_candidates_decision_ck CHECK (
@@ -77,11 +77,11 @@ BEFORE INSERT OR UPDATE OF privacy_record_type, privacy_record_id, organization_
 ON privacy_assurance_candidates FOR EACH ROW EXECUTE FUNCTION validate_privacy_assurance_candidate();
 
 -- Human acceptance materializes a controlled assurance artifact. It never creates tests, exceptions, findings, risks, or conclusions.
-CREATE OR REPLACE FUNCTION accept_privacy_assurance_candidate(candidate_id uuid, actor_id uuid, rationale text)
+CREATE OR REPLACE FUNCTION accept_privacy_assurance_candidate(candidate_id uuid, actor_id uuid, decision_reason text)
 RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE c privacy_assurance_candidates%ROWTYPE; created_id uuid;
 BEGIN
-  IF rationale IS NULL OR length(btrim(rationale)) = 0 THEN RAISE EXCEPTION 'Decision rationale is required'; END IF;
+  IF decision_reason IS NULL OR length(btrim(decision_reason)) = 0 THEN RAISE EXCEPTION 'Decision rationale is required'; END IF;
   SELECT * INTO c FROM privacy_assurance_candidates WHERE id=candidate_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Privacy assurance candidate not found'; END IF;
   IF c.status <> 'PROPOSED' THEN RAISE EXCEPTION 'Only PROPOSED candidates may be accepted'; END IF;
@@ -89,28 +89,28 @@ BEGIN
 
   IF c.candidate_type = 'SCOPE' THEN
     INSERT INTO scopes(engagement_id, organization_id, name, description, in_scope, scope_type, rationale)
-    VALUES(c.engagement_id, c.organization_id, c.suggested_title, c.rationale, true, 'PRIVACY_OPERATION', rationale)
+    VALUES(c.engagement_id, c.organization_id, c.suggested_title, c.rationale, true, 'PRIVACY_OPERATION', decision_reason)
     RETURNING id INTO created_id;
-    UPDATE privacy_assurance_candidates SET status='ACCEPTED', decided_by=actor_id, decided_at=now(), decision_rationale=rationale, scope_id=created_id WHERE id=c.id;
+    UPDATE privacy_assurance_candidates SET status='ACCEPTED', decided_by=actor_id, decided_at=now(), decision_rationale=decision_reason, scope_id=created_id WHERE id=c.id;
   ELSE
     INSERT INTO pbc_requests(engagement_id, requested_by, title, description, status, expected_evidence)
     VALUES(c.engagement_id, actor_id, c.suggested_title, c.rationale, 'OPEN', c.suggested_evidence)
     RETURNING id INTO created_id;
-    UPDATE privacy_assurance_candidates SET status='ACCEPTED', decided_by=actor_id, decided_at=now(), decision_rationale=rationale, pbc_request_id=created_id WHERE id=c.id;
+    UPDATE privacy_assurance_candidates SET status='ACCEPTED', decided_by=actor_id, decided_at=now(), decision_rationale=decision_reason, pbc_request_id=created_id WHERE id=c.id;
   END IF;
 
   INSERT INTO privacy_assurance_links(organization_id, engagement_id, privacy_record_type, privacy_record_id, rationale, linked_by)
-  VALUES(c.organization_id, c.engagement_id, c.privacy_record_type, c.privacy_record_id, rationale, actor_id)
+  VALUES(c.organization_id, c.engagement_id, c.privacy_record_type, c.privacy_record_id, decision_reason, actor_id)
   ON CONFLICT (engagement_id, privacy_record_type, privacy_record_id) DO NOTHING;
   RETURN created_id;
 END $$;
 
-CREATE OR REPLACE FUNCTION reject_privacy_assurance_candidate(candidate_id uuid, actor_id uuid, rationale text)
+CREATE OR REPLACE FUNCTION reject_privacy_assurance_candidate(candidate_id uuid, actor_id uuid, decision_reason text)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
-  IF rationale IS NULL OR length(btrim(rationale)) = 0 THEN RAISE EXCEPTION 'Decision rationale is required'; END IF;
+  IF decision_reason IS NULL OR length(btrim(decision_reason)) = 0 THEN RAISE EXCEPTION 'Decision rationale is required'; END IF;
   UPDATE privacy_assurance_candidates
-    SET status='REJECTED', decided_by=actor_id, decided_at=now(), decision_rationale=rationale
+    SET status='REJECTED', decided_by=actor_id, decided_at=now(), decision_rationale=decision_reason
   WHERE id=candidate_id AND status='PROPOSED';
   IF NOT FOUND THEN RAISE EXCEPTION 'Only an existing PROPOSED candidate may be rejected'; END IF;
 END $$;
