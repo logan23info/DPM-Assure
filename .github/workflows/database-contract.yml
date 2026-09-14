@@ -61,8 +61,14 @@ jobs:
             psql -v ON_ERROR_STOP=1 -f "${migration}"
           done
 
-      - name: Run schema contract assertions
-        run: psql -v ON_ERROR_STOP=1 -f db/tests/001_schema_contract.sql
+      - name: Run database contract assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for contract in db/tests/*.sql; do
+            echo "Running ${contract}"
+            psql -v ON_ERROR_STOP=1 -f "${contract}"
+          done
 
       - name: Verify migrations are deterministic on a clean second database
         shell: bash
@@ -74,4 +80,7 @@ jobs:
             echo "Applying ${migration} to second clean database"
             psql -v ON_ERROR_STOP=1 -f "${migration}"
           done
-          psql -v ON_ERROR_STOP=1 -f db/tests/001_schema_contract.sql
+          for contract in db/tests/*.sql; do
+            echo "Running ${contract} on second clean database"
+            psql -v ON_ERROR_STOP=1 -f "${contract}"
+          done
