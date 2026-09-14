@@ -19,37 +19,39 @@ export interface CurrentUserContext {
   readonly memberships: readonly CurrentMembership[];
 }
 
+async function discoverMemberships(userId: string): Promise<readonly CurrentMembership[]> {
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    await client.query("select set_config('app.user_id', $1, true)", [userId]);
+    const memberships = await client.query<{
+      organization_id: string;
+      organization_name: string;
+      organization_slug: string;
+      role: MembershipRole;
+    }>("select organization_id, organization_name, organization_slug, role from auth_current_user_memberships()");
+    await client.query("commit");
+    return memberships.rows.map((row) => ({
+      organizationId: row.organization_id,
+      organizationName: row.organization_name,
+      organizationSlug: row.organization_slug,
+      role: row.role,
+    }));
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function getCurrentUserContext(): Promise<CurrentUserContext | null> {
   const cookieStore = await cookies();
   const principal = await resolveSessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
   if (!principal) return null;
 
-  const memberships = await getPool().query<{
-    organization_id: string;
-    organization_name: string;
-    organization_slug: string;
-    role: MembershipRole;
-  }>(
-    `select m.organization_id,
-            o.name as organization_name,
-            o.slug as organization_slug,
-            m.role
-       from memberships m
-       join organizations o on o.id = m.organization_id
-      where m.user_id = $1
-        and m.status = 'ACTIVE'
-        and o.status = 'ACTIVE'
-      order by o.name asc`,
-    [principal.userId],
-  );
-
   return {
     principal,
-    memberships: memberships.rows.map((row) => ({
-      organizationId: row.organization_id,
-      organizationName: row.organization_name,
-      organizationSlug: row.organization_slug,
-      role: row.role,
-    })),
+    memberships: await discoverMemberships(principal.userId),
   };
 }
