@@ -43,6 +43,7 @@ export const permissions = {
   complianceProfileManage: "compliance.profile.manage",
   complianceApplicabilityEvaluate: "compliance.applicability.evaluate",
   complianceObligationMaterialize: "compliance.obligation.materialize",
+  complianceMonitoringManage: "compliance.monitoring.manage",
   auditLogRead: "audit_log.read",
   aiUse: "ai.use",
   aiReview: "ai.review",
@@ -51,9 +52,7 @@ export const permissions = {
 
 export type Permission = (typeof permissions)[keyof typeof permissions];
 
-const allPermissions = Object.freeze(
-  new Set<Permission>(Object.values(permissions)),
-);
+const allPermissions = Object.freeze(new Set<Permission>(Object.values(permissions)));
 
 const rolePermissions: Readonly<Record<MembershipRole, ReadonlySet<Permission>>> = {
   SUPER_ADMIN: allPermissions,
@@ -175,27 +174,16 @@ const rolePermissions: Readonly<Record<MembershipRole, ReadonlySet<Permission>>>
 };
 
 export class AuthorizationDeniedError extends Error {
-  constructor(
-    readonly role: MembershipRole,
-    readonly permission: Permission,
-  ) {
+  constructor(readonly role: MembershipRole, readonly permission: Permission) {
     super(`Role ${role} is not authorized for ${permission}`);
     this.name = "AuthorizationDeniedError";
   }
 }
 
-export function hasPermission(
-  role: MembershipRole,
-  permission: Permission,
-): boolean {
+export function hasPermission(role: MembershipRole, permission: Permission): boolean {
   return rolePermissions[role].has(permission);
 }
 
-export function requirePermission(
-  role: MembershipRole,
-  permission: Permission,
-): void {
-  if (!hasPermission(role, permission)) {
-    throw new AuthorizationDeniedError(role, permission);
-  }
+export function requirePermission(role: MembershipRole, permission: Permission): void {
+  if (!hasPermission(role, permission)) throw new AuthorizationDeniedError(role, permission);
 }
