@@ -6,6 +6,7 @@ export default defineConfig({
     "./src/db/governance-schema.ts",
     "./src/db/privacy-schema.ts",
     "./src/db/privacy-alert-schema.ts",
+    "./src/db/privacy-assurance-schema.ts",
   ],
   out: "./drizzle",
   dialect: "postgresql",
