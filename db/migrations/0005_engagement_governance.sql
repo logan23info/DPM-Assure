@@ -104,14 +104,14 @@ AS $$
     );
 $$;
 
--- The original lifecycle trigger allows PLANNING -> TESTING. Strengthen that edge
--- so the transition cannot occur unless governance prerequisites are satisfied.
-CREATE OR REPLACE FUNCTION enforce_engagement_status_transition()
+-- The foundation trigger calls enforce_engagement_transition(). Replace that function
+-- in place so the existing trigger acquires the new governance rule without trigger drift.
+CREATE OR REPLACE FUNCTION enforce_engagement_transition()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF NEW.status = OLD.status THEN
+  IF OLD.status = NEW.status THEN
     RETURN NEW;
   END IF;
 
@@ -122,11 +122,10 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  IF OLD.status = 'TESTING' AND NEW.status = 'REVIEW' THEN
-    RETURN NEW;
-  END IF;
-
-  IF OLD.status = 'REVIEW' AND NEW.status IN ('TESTING','CLOSED') THEN
+  -- Preserve all other transitions from the frozen lifecycle truth table.
+  IF (OLD.status = 'PLANNING' AND NEW.status = 'CLOSED')
+     OR (OLD.status = 'TESTING' AND NEW.status IN ('REVIEW','CLOSED'))
+     OR (OLD.status = 'REVIEW' AND NEW.status = 'CLOSED') THEN
     RETURN NEW;
   END IF;
 
