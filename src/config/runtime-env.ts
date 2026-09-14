@@ -38,9 +38,16 @@ function positiveInt(env: NodeJS.ProcessEnv, name: string, fallback: number): nu
   return value;
 }
 
+function isLoopback(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
 export function validateRuntimeEnvironment(env: NodeJS.ProcessEnv = process.env): RuntimeEnvironment {
   const appBaseUrl = absoluteUrl(env, "APP_BASE_URL", ["http:", "https:"]);
-  if (env.NODE_ENV === "production" && new URL(appBaseUrl).protocol !== "https:") throw new Error("APP_BASE_URL must use https in production");
+  const publicOrigin = new URL(appBaseUrl);
+  if (env.NODE_ENV === "production" && publicOrigin.protocol !== "https:" && !isLoopback(publicOrigin.hostname)) {
+    throw new Error("APP_BASE_URL must use https in production except for loopback verification");
+  }
   return Object.freeze({
     appBaseUrl,
     databaseUrl: absoluteUrl(env, "DATABASE_URL", ["postgres:", "postgresql:"]),
