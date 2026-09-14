@@ -39,6 +39,11 @@ test("requires https application origin in production", () => {
   assert.throws(() => validateRuntimeEnvironment(env), /must use https in production/);
 });
 
+test("permits loopback http for production-equivalent verification", () => {
+  const env = valid(); env.APP_BASE_URL = "http://127.0.0.1:3000";
+  assert.equal(validateRuntimeEnvironment(env).appBaseUrl, "http://127.0.0.1:3000");
+});
+
 test("rejects invalid numeric limits", () => {
   const env = valid(); env.EVIDENCE_MAX_UPLOAD_BYTES = "0";
   assert.throws(() => validateRuntimeEnvironment(env), /positive integer/);
