@@ -98,6 +98,10 @@ export async function inviteOrganizationMember(
   `);
   if (existing.rows.length > 0) throw new Error("User is already an active organization member");
 
+  // Provision only a global identity so the invited address can authenticate by magic link.
+  // This function never grants organization membership.
+  await transaction.db.execute(sql`select provision_invited_identity(${email})`);
+
   const token = opaqueToken();
   const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
   const [created] = await transaction.db
@@ -121,7 +125,7 @@ export async function inviteOrganizationMember(
     entityType: "organization_invitation",
     payload: { invitationId: created.id, email, role: input.role },
     newValues: { email, role: input.role, status: created.status, expiresAt },
-    metadata: { tokenPersisted: false },
+    metadata: { tokenPersisted: false, membershipGranted: false },
   });
 
   return { id: created.id, email, role: input.role, token, expiresAt };
