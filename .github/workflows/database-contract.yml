@@ -1,0 +1,77 @@
+name: Database Contract
+
+on:
+  push:
+    paths:
+      - 'db/**'
+      - 'docs/DATABASE-SCHEMA.md'
+      - 'docs/DATABASE-SECURITY-MODEL.md'
+      - '.github/workflows/database-contract.yml'
+  pull_request:
+    paths:
+      - 'db/**'
+      - 'docs/DATABASE-SCHEMA.md'
+      - 'docs/DATABASE-SECURITY-MODEL.md'
+      - '.github/workflows/database-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: dpm_assure_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d dpm_assure_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGDATABASE: dpm_assure_test
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show PostgreSQL version
+        run: psql --version
+
+      - name: Apply migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in db/migrations/*.sql; do
+            echo "Applying ${migration}"
+            psql -v ON_ERROR_STOP=1 -f "${migration}"
+          done
+
+      - name: Run schema contract assertions
+        run: psql -v ON_ERROR_STOP=1 -f db/tests/001_schema_contract.sql
+
+      - name: Verify migrations are deterministic on a clean second database
+        shell: bash
+        run: |
+          set -euo pipefail
+          createdb dpm_assure_test_second
+          export PGDATABASE=dpm_assure_test_second
+          for migration in db/migrations/*.sql; do
+            echo "Applying ${migration} to second clean database"
+            psql -v ON_ERROR_STOP=1 -f "${migration}"
+          done
+          psql -v ON_ERROR_STOP=1 -f db/tests/001_schema_contract.sql
