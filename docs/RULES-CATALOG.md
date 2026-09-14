@@ -15,5 +15,8 @@ Rules are deterministic product decisions. Each rule must have an identifier, pu
 - `FREEZE-001` — frozen audit records cannot be silently mutated.
 - `RISK-001` — risk scores are calculated deterministically and remain explainable.
 - `MAP-001` — cross-framework mappings require an explicit relationship and rationale.
+- `APPL-001` — applicability must resolve from a versioned source-backed rule plus validated organization facts; incomplete facts return `REVIEW_REQUIRED`, never a guessed compliance answer.
+- `OBL-001` — an obligation may be materialized only from an `APPLICABLE` determination, and its due date must be calculated from the versioned rule's governed trigger/offset rather than caller-supplied legal assumptions.
+- `OBL-002` — obligation-rule validity may not precede its authoritative source or extend beyond source retirement.
 
-Rules are not legal requirements. They define DPM-Assure behavior.
+Rules are not legal requirements. They define DPM-Assure behavior. Where a rule operationalizes a legal or standard requirement, it must preserve the authoritative source and requirement provenance rather than becoming an independent compliance claim.
