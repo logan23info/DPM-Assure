@@ -6,6 +6,8 @@ import { getPool } from "@/db/runtime";
 
 const LOGIN_TOKEN_TTL_MS = 15 * 60 * 1000;
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const MAX_LOGIN_REQUESTS_PER_WINDOW = 5;
 
 function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -33,6 +35,17 @@ export async function issueLoginToken(
   metadata: { ip?: string | null; userAgent?: string | null } = {},
 ): Promise<LoginTokenIssue | null> {
   const normalized = email.trim().toLowerCase();
+  const windowStart = new Date(Date.now() - LOGIN_WINDOW_MS);
+
+  const rate = await getPool().query<{ request_count: string }>(
+    `select count(*)::text as request_count
+       from auth_login_tokens
+      where requested_at >= $1
+        and (lower(email)=lower($2) or ($3::inet is not null and requested_ip=$3::inet))`,
+    [windowStart, normalized, metadata.ip ?? null],
+  );
+  if (Number(rate.rows[0]?.request_count ?? "0") >= MAX_LOGIN_REQUESTS_PER_WINDOW) return null;
+
   const user = await getPool().query<{ email: string }>(
     "select email from users where lower(email)=lower($1) and status='ACTIVE' limit 1",
     [normalized],
