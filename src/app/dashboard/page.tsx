@@ -38,21 +38,28 @@ export default async function DashboardPage() {
           </div>
         ) : (
           <div className="organization-grid">
-            {current.memberships.map((membership) => (
-              <article className="organization-card" key={membership.organizationId}>
-                <div>
-                  <span className="role-badge">{membership.role.replaceAll("_", " ")}</span>
-                  <h3>{membership.organizationName}</h3>
-                  <p>{membership.organizationSlug}</p>
-                </div>
-                <Link
-                  className="primary-link"
-                  href={`/organizations/${membership.organizationId}/compliance/monitoring`}
-                >
-                  Open compliance monitoring
-                </Link>
-              </article>
-            ))}
+            {current.memberships.map((membership) => {
+              const canManageUsers = membership.role === "ORG_ADMIN" || membership.role === "SUPER_ADMIN";
+              return (
+                <article className="organization-card" key={membership.organizationId}>
+                  <div>
+                    <span className="role-badge">{membership.role.replaceAll("_", " ")}</span>
+                    <h3>{membership.organizationName}</h3>
+                    <p>{membership.organizationSlug}</p>
+                  </div>
+                  <div className="card-actions">
+                    <Link className="primary-link" href={`/organizations/${membership.organizationId}/compliance/monitoring`}>
+                      Open compliance monitoring
+                    </Link>
+                    {canManageUsers ? (
+                      <Link className="secondary-link" href={`/organizations/${membership.organizationId}/members`}>
+                        Manage members
+                      </Link>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
