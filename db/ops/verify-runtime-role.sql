@@ -6,9 +6,11 @@
   \quit 1
 \endif
 
+SELECT set_config('dpm.runtime_role', :'runtime_role', false);
+
 DO $verify$
 DECLARE
-  runtime_name text := :'runtime_role';
+  runtime_name text := current_setting('dpm.runtime_role');
   role_row pg_roles%ROWTYPE;
   owned_count integer;
 BEGIN
