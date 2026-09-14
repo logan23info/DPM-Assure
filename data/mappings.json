@@ -1,0 +1,4 @@
+[
+  {"mapping_id":"MAP-001","from_control_id":"DPM-EVD-001","to_requirement_id":"DPDP-R-001","relationship":"SUPPORTS","coverage":"INDIRECT","rationale":"Evidence governance supports demonstrability of compliance decisions but does not itself establish the legal requirement","status":"DRAFT","review_required":true},
+  {"mapping_id":"MAP-002","from_control_id":"DPM-SEC-001","to_requirement_id":"ASVS-R-001","relationship":"SUPPORTS","coverage":"PARTIAL","rationale":"Authenticated protected access is one component of application security verification","status":"DRAFT","review_required":true}
+]
