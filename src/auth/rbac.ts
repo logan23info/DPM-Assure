@@ -36,6 +36,7 @@ export const permissions = {
   privacyApprove: "privacy.approve",
   privacyDsrManage: "privacy.dsr.manage",
   privacyBreachManage: "privacy.breach.manage",
+  privacyAlertsManage: "privacy.alerts.manage",
   auditLogRead: "audit_log.read",
   aiUse: "ai.use",
   aiReview: "ai.review",
