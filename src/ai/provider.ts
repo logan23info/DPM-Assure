@@ -9,9 +9,9 @@ export interface AiGenerationRequest {
 export interface AiGenerationResponse {
  readonly provider: string;
  readonly model: string;
- readonly modelVersion?: string;
+ readonly modelVersion?: string | undefined;
  readonly output: Readonly<Record<string,unknown>>;
- readonly confidence?: number;
+ readonly confidence?: number | undefined;
 }
 export interface AiProvider { generate(request:AiGenerationRequest):Promise<AiGenerationResponse>; }
 
