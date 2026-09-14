@@ -7,9 +7,11 @@ INSERT INTO organizations(id,name,slug) VALUES
  ('a0000000-0000-0000-0000-000000000002','PAI Org B','pai-org-b');
 INSERT INTO users(id,email,display_name) VALUES
  ('a1000000-0000-0000-0000-000000000001','pai-a@example.test','PAI A'),
- ('a1000000-0000-0000-0000-000000000002','pai-b@example.test','PAI B');
+ ('a1000000-0000-0000-0000-000000000002','pai-b@example.test','PAI B'),
+ ('a1000000-0000-0000-0000-000000000003','pai-reviewer@example.test','PAI Reviewer');
 INSERT INTO memberships(organization_id,user_id,role) VALUES
- ('a0000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000001','ORG_ADMIN'),
+ ('a0000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000001','LEAD_AUDITOR'),
+ ('a0000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000003','AUDIT_MANAGER'),
  ('a0000000-0000-0000-0000-000000000002','a1000000-0000-0000-0000-000000000002','ORG_ADMIN');
 INSERT INTO clients(id,organization_id,name) VALUES
  ('a2000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','Client A'),
@@ -20,7 +22,6 @@ INSERT INTO engagements(id,organization_id,client_id,name,created_by) VALUES
 INSERT INTO processing_activities(id,organization_id,name,purpose,controller_processor_role,created_by)
 VALUES ('a4000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','Customer support','Support','CONTROLLER','a1000000-0000-0000-0000-000000000001');
 
--- Valid scope proposal.
 INSERT INTO privacy_assurance_candidates(
  id,organization_id,engagement_id,privacy_record_type,privacy_record_id,candidate_type,suggested_title,rationale,proposed_by)
 VALUES (
@@ -38,8 +39,18 @@ BEGIN
   END;
 END $$;
 
+DO $$
+BEGIN
+  BEGIN
+    PERFORM accept_privacy_assurance_candidate('a5000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000001','Self approval attempt');
+    RAISE EXCEPTION 'expected self-approval to fail';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'expected self-approval to fail' THEN RAISE; END IF;
+  END;
+END $$;
+
 SELECT accept_privacy_assurance_candidate(
- 'a5000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000001','Include processing activity in approved audit scope');
+ 'a5000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000003','Include processing activity in approved audit scope');
 
 DO $$
 DECLARE c privacy_assurance_candidates%ROWTYPE;
@@ -56,14 +67,13 @@ BEGIN
  END IF;
 END $$;
 
--- Evidence-request proposal becomes PBC, not evidence or conclusion.
 INSERT INTO privacy_assurance_candidates(
  id,organization_id,engagement_id,privacy_record_type,privacy_record_id,candidate_type,suggested_title,rationale,suggested_evidence,proposed_by)
 VALUES (
  'a5000000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a3000000-0000-0000-0000-000000000001',
  'PROCESSING_ACTIVITY','a4000000-0000-0000-0000-000000000001','EVIDENCE_REQUEST','Provide processing inventory evidence','Evidence is needed to test the operational record','Current approved RoPA export','a1000000-0000-0000-0000-000000000001');
 SELECT accept_privacy_assurance_candidate(
- 'a5000000-0000-0000-0000-000000000002','a1000000-0000-0000-0000-000000000001','Request source evidence through PBC');
+ 'a5000000-0000-0000-0000-000000000002','a1000000-0000-0000-0000-000000000003','Request source evidence through PBC');
 
 DO $$
 DECLARE c privacy_assurance_candidates%ROWTYPE;
@@ -77,7 +87,7 @@ END $$;
 DO $$
 BEGIN
   BEGIN
-    PERFORM accept_privacy_assurance_candidate('a5000000-0000-0000-0000-000000000002','a1000000-0000-0000-0000-000000000001','Duplicate decision');
+    PERFORM accept_privacy_assurance_candidate('a5000000-0000-0000-0000-000000000002','a1000000-0000-0000-0000-000000000003','Duplicate decision');
     RAISE EXCEPTION 'expected duplicate acceptance to fail';
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM = 'expected duplicate acceptance to fail' THEN RAISE; END IF;
