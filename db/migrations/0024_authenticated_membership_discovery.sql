@@ -3,6 +3,30 @@
 -- membership discovery necessarily occur before an organization tenant has been selected, so
 -- these helpers are deliberately narrow SECURITY DEFINER boundaries.
 
+CREATE OR REPLACE FUNCTION auth_active_user_by_email(p_email text)
+RETURNS TABLE (
+  user_id uuid,
+  email text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+SET row_security = off
+AS $$
+  SELECT u.id, u.email
+  FROM users u
+  WHERE lower(u.email) = lower(btrim(p_email))
+    AND u.status = 'ACTIVE'
+  LIMIT 1
+$$;
+
+REVOKE ALL ON FUNCTION auth_active_user_by_email(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION auth_active_user_by_email(text) TO PUBLIC;
+
+COMMENT ON FUNCTION auth_active_user_by_email(text) IS
+  'Server-only authentication bootstrap for resolving an active identity by normalized email before tenant selection.';
+
 CREATE OR REPLACE FUNCTION auth_resolve_session(p_token_hash char(64))
 RETURNS TABLE (
   session_id uuid,
