@@ -6,7 +6,8 @@
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dpm_contract_runtime') THEN
-    DROP ROLE dpm_contract_runtime;
+    EXECUTE 'DROP OWNED BY dpm_contract_runtime';
+    EXECUTE 'DROP ROLE dpm_contract_runtime';
   END IF;
   CREATE ROLE dpm_contract_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
 END $$;
@@ -127,6 +128,7 @@ BEGIN
 END $$;
 
 ROLLBACK;
+DROP OWNED BY dpm_contract_runtime;
 DROP ROLE dpm_contract_runtime;
 
 SELECT 'DPM-Assure runtime security behavioral contract: PASS' AS result;
