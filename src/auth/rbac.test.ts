@@ -57,6 +57,21 @@ test("assurance roles may read privacy operations without mutating them", () => 
   assert.equal(hasPermission("REVIEWER", permissions.privacyRead), true);
 });
 
+test("privacy assurance bridge separates proposal from decision authority", () => {
+  assert.equal(hasPermission("AUDITOR", permissions.privacyAssurancePropose), true);
+  assert.equal(hasPermission("AUDITOR", permissions.privacyAssuranceDecide), false);
+  assert.equal(hasPermission("LEAD_AUDITOR", permissions.privacyAssurancePropose), true);
+  assert.equal(hasPermission("LEAD_AUDITOR", permissions.privacyAssuranceDecide), false);
+  assert.equal(hasPermission("REVIEWER", permissions.privacyAssurancePropose), false);
+  assert.equal(hasPermission("REVIEWER", permissions.privacyAssuranceDecide), true);
+  assert.equal(hasPermission("AUDIT_MANAGER", permissions.privacyAssurancePropose), true);
+  assert.equal(hasPermission("AUDIT_MANAGER", permissions.privacyAssuranceDecide), true);
+  assert.equal(hasPermission("CLIENT", permissions.privacyAssurancePropose), false);
+  assert.equal(hasPermission("CLIENT", permissions.privacyAssuranceDecide), false);
+  assert.equal(hasPermission("VIEWER", permissions.privacyAssurancePropose), false);
+  assert.equal(hasPermission("VIEWER", permissions.privacyAssuranceDecide), false);
+});
+
 test("client access cannot create findings or approve reports", () => {
   assert.equal(hasPermission("CLIENT", permissions.findingCreate), false);
   assert.equal(hasPermission("CLIENT", permissions.reportApprove), false);
