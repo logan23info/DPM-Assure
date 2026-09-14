@@ -1,0 +1,75 @@
+name: Runtime Role Contract
+
+on:
+  push:
+    branches: [main, production-database-provisioning]
+    paths:
+      - 'db/migrations/**'
+      - 'db/ops/**'
+      - '.github/workflows/runtime-role-contract.yml'
+  pull_request:
+    paths:
+      - 'db/migrations/**'
+      - 'db/ops/**'
+      - '.github/workflows/runtime-role-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-role-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: dpm_runtime_contract
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d dpm_runtime_contract"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGDATABASE: dpm_runtime_contract
+      PGUSER: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply canonical migrations as schema owner
+        run: |
+          set -euo pipefail
+          for migration in db/migrations/*.sql; do
+            echo "Applying ${migration}"
+            psql -v ON_ERROR_STOP=1 -f "${migration}"
+          done
+
+      - name: Provision non-owner runtime role
+        run: psql -v ON_ERROR_STOP=1 -v runtime_role=dpm_runtime -v schema_owner=postgres -f db/ops/provision-runtime-role.sql
+
+      - name: Verify runtime role attributes and grants
+        run: psql -v ON_ERROR_STOP=1 -v runtime_role=dpm_runtime -f db/ops/verify-runtime-role.sql
+
+      - name: Prove RLS is fail-closed without tenant context
+        run: |
+          set -euo pipefail
+          count="$(psql -At -v ON_ERROR_STOP=1 -c "SET ROLE dpm_runtime; SELECT count(*) FROM organizations;")"
+          test "$count" = "0"
+
+      - name: Prove runtime cannot create schema objects
+        run: |
+          set -euo pipefail
+          if psql -v ON_ERROR_STOP=1 -c "SET ROLE dpm_runtime; CREATE TABLE public.runtime_must_not_create(id integer);"; then
+            echo 'Runtime role unexpectedly created a schema object'
+            exit 1
+          fi
