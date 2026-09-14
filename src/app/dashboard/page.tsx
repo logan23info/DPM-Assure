@@ -12,55 +12,16 @@ export default async function DashboardPage() {
   return (
     <main className="dashboard-shell">
       <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">DPM-Assure</p>
-          <h1>Assurance workspace</h1>
-          <p className="lede compact">Signed in as {current.principal.email ?? current.principal.userId}</p>
-        </div>
-        <form action="/api/auth/logout" method="post">
-          <button className="secondary-button" type="submit">Sign out</button>
-        </form>
+        <div><p className="eyebrow">DPM-Assure</p><h1>Assurance workspace</h1><p className="lede compact">Signed in as {current.principal.email ?? current.principal.userId}</p></div>
+        <form action="/api/auth/logout" method="post"><button className="secondary-button" type="submit">Sign out</button></form>
       </header>
-
       <section className="workspace-panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Authorized organizations</p>
-            <h2>Select an organization</h2>
-          </div>
-          <span className="count-badge">{current.memberships.length}</span>
-        </div>
-
-        {current.memberships.length === 0 ? (
-          <div className="empty-state">
-            <strong>No active organization membership</strong>
-            <p>Your account is valid, but no active tenant membership is assigned. An organization administrator must grant access.</p>
-          </div>
-        ) : (
-          <div className="organization-grid">
-            {current.memberships.map((membership) => {
-              const canManageUsers = membership.role === "ORG_ADMIN" || membership.role === "SUPER_ADMIN";
-              return (
-                <article className="organization-card" key={membership.organizationId}>
-                  <div>
-                    <span className="role-badge">{membership.role.replaceAll("_", " ")}</span>
-                    <h3>{membership.organizationName}</h3>
-                    <p>{membership.organizationSlug}</p>
-                  </div>
-                  <div className="card-actions">
-                    <Link className="primary-link" href={`/organizations/${membership.organizationId}/compliance/monitoring`}>
-                      Open compliance monitoring
-                    </Link>
-                    {canManageUsers ? (
-                      <Link className="secondary-link" href={`/organizations/${membership.organizationId}/members`}>
-                        Manage members
-                      </Link>
-                    ) : null}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+        <div className="section-heading"><div><p className="eyebrow">Authorized organizations</p><h2>Select an organization</h2></div><span className="count-badge">{current.memberships.length}</span></div>
+        {current.memberships.length === 0 ? <div className="empty-state"><strong>No active organization membership</strong><p>Your account is valid, but no active tenant membership is assigned. An organization administrator must grant access.</p></div> : (
+          <div className="organization-grid">{current.memberships.map((membership) => {
+            const canManageUsers = membership.role === "ORG_ADMIN" || membership.role === "SUPER_ADMIN";
+            return <article className="organization-card" key={membership.organizationId}><div><span className="role-badge">{membership.role.replaceAll("_", " ")}</span><h3>{membership.organizationName}</h3><p>{membership.organizationSlug}</p></div><div className="card-actions"><Link className="primary-link" href={`/organizations/${membership.organizationId}/engagements`}>Open assurance engagements</Link><Link className="secondary-link" href={`/organizations/${membership.organizationId}/compliance/monitoring`}>Compliance monitoring</Link>{canManageUsers ? <Link className="secondary-link" href={`/organizations/${membership.organizationId}/members`}>Manage members</Link> : null}</div></article>;
+          })}</div>
         )}
       </section>
     </main>
