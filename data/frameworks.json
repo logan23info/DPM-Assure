@@ -1,0 +1,13 @@
+[
+  {"framework_id":"NIST-PF","name":"NIST Privacy Framework","source_id":"NIST-PF-1.0","version":"1.0","status":"CURRENT_BASELINE"},
+  {"framework_id":"ISO-27701","name":"ISO/IEC 27701","source_id":"ISO-27701-2025","version":"2025","status":"CURRENT"},
+  {"framework_id":"AICPA-TSC","name":"AICPA Trust Services Criteria","source_id":"AICPA-TSC-2017-2022","version":"2017/2022","status":"CURRENT_BASELINE"},
+  {"framework_id":"INDIA-DPDP","name":"India Digital Personal Data Protection","source_id":"INDIA-DPDP-RULES-2025","version":"Act 2023 / Rules 2025","status":"PUBLISHED"},
+  {"framework_id":"OWASP-ASVS","name":"OWASP Application Security Verification Standard","source_id":"OWASP-ASVS-5.0.0","version":"5.0.0","status":"CURRENT"},
+  {"framework_id":"CSA-CCM","name":"Cloud Controls Matrix","source_id":"CSA-CCM-4.1","version":"4.1","status":"CURRENT"},
+  {"framework_id":"ISO-27001","name":"ISO/IEC 27001","source_id":"ISO-27001-2022","version":"2022/Amd1:2024","status":"CURRENT"},
+  {"framework_id":"ISO-27018","name":"ISO/IEC 27018","source_id":"ISO-27018-2025","version":"2025","status":"CURRENT"},
+  {"framework_id":"ISO-29134","name":"ISO/IEC 29134 PIA guidance","source_id":"ISO-29134-2023","version":"2023","status":"CURRENT"},
+  {"framework_id":"ISO-29184","name":"ISO/IEC 29184 privacy notices","source_id":"ISO-29184-2020","version":"2020","status":"CURRENT"},
+  {"framework_id":"IIA-GLOBAL","name":"Global Internal Audit Standards","source_id":"IIA-GLOBAL-STANDARDS-2024","version":"2024","status":"EFFECTIVE"}
+]
