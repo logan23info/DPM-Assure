@@ -1,0 +1,10 @@
+import { createCookieSessionResolver } from "@/auth/cookie-session";
+import { withAuthorizedTenantTransaction } from "@/auth/authorize";
+import { permissions } from "@/auth/rbac";
+import { requireAuthenticatedPrincipal } from "@/auth/session";
+import { generateAiAssistance, listAiGenerations, publishAiGeneration, reviewAiGeneration } from "@/domain/ai/service";
+
+export const runtime="nodejs";type RouteContext={params:Promise<{organizationId:string}>};
+async function auth(request:Request){return requireAuthenticatedPrincipal(createCookieSessionResolver(request));}
+export async function GET(request:Request,context:RouteContext){const{organizationId}=await context.params;try{const p=await auth(request);const url=new URL(request.url);const engagementId=url.searchParams.get("engagementId");const result=await withAuthorizedTenantTransaction({principal:p,organizationId,requestId:crypto.randomUUID(),permission:permissions.aiUse},tx=>listAiGenerations(tx,engagementId));return Response.json({generations:result});}catch(error){return Response.json({error:"AI_REJECTED",message:error instanceof Error?error.message:"AI request rejected"},{status:400});}}
+export async function POST(request:Request,context:RouteContext){const{organizationId}=await context.params;try{const p=await auth(request);const body=await request.json() as Record<string,unknown>;const result=await withAuthorizedTenantTransaction({principal:p,organizationId,requestId:crypto.randomUUID(),permission:permissions.organizationRead},async tx=>{switch(body.action){case"generate":return generateAiAssistance(tx,body.input as Record<string,unknown>);case"review":return reviewAiGeneration(tx,body.input as {generationId:string;decision:"APPROVED"|"REJECTED"});case"publish":return publishAiGeneration(tx,String((body.input as Record<string,unknown>)?.generationId??""));default:throw new Error("Unsupported AI action");}});return Response.json({result});}catch(error){return Response.json({error:"AI_REJECTED",message:error instanceof Error?error.message:"AI request rejected"},{status:400});}}
