@@ -28,6 +28,12 @@ VALUES(
 DO $$
 DECLARE c integer;
 BEGIN
+  SELECT count(*) INTO c FROM auth_active_user_by_email('  MEMBERSHIP-A@example.test ');
+  IF c <> 1 THEN RAISE EXCEPTION 'expected active identity bootstrap row, got %', c; END IF;
+  IF EXISTS (SELECT 1 FROM auth_active_user_by_email('missing@example.test')) THEN
+    RAISE EXCEPTION 'unknown identity must not resolve';
+  END IF;
+
   SELECT count(*) INTO c
   FROM auth_resolve_session(encode(digest('membership-bootstrap-session-token-abcdefghijklmnopqrstuvwxyz','sha256'),'hex')::char(64));
   IF c <> 1 THEN RAISE EXCEPTION 'expected valid session bootstrap row, got %', c; END IF;
