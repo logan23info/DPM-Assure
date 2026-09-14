@@ -43,8 +43,10 @@ test("privacy operations mutations are restricted to organization administration
   assert.equal(hasPermission("ORG_ADMIN", permissions.privacyApprove), true);
   assert.equal(hasPermission("ORG_ADMIN", permissions.privacyDsrManage), true);
   assert.equal(hasPermission("ORG_ADMIN", permissions.privacyBreachManage), true);
+  assert.equal(hasPermission("ORG_ADMIN", permissions.privacyAlertsManage), true);
   assert.equal(hasPermission("AUDIT_MANAGER", permissions.privacyManage), false);
   assert.equal(hasPermission("AUDITOR", permissions.privacyManage), false);
+  assert.equal(hasPermission("AUDITOR", permissions.privacyAlertsManage), false);
   assert.equal(hasPermission("REVIEWER", permissions.privacyApprove), false);
 });
 
