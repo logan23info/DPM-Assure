@@ -67,14 +67,26 @@ BEGIN
   IF NOT privacy_record_exists_in_org(NEW.privacy_record_type, NEW.privacy_record_id, NEW.organization_id) THEN
     RAISE EXCEPTION 'Privacy source record does not exist in candidate organization';
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM memberships m WHERE m.organization_id=NEW.organization_id AND m.user_id=NEW.proposed_by AND m.status='ACTIVE') THEN
+    RAISE EXCEPTION 'Candidate proposer must be an active member of the organization';
+  END IF;
   IF EXISTS (SELECT 1 FROM engagements e WHERE e.id=NEW.engagement_id AND e.frozen_at IS NOT NULL) THEN
     RAISE EXCEPTION 'Cannot add privacy assurance candidates to a frozen engagement';
   END IF;
   RETURN NEW;
 END $$;
 CREATE TRIGGER privacy_assurance_candidate_source_guard
-BEFORE INSERT OR UPDATE OF privacy_record_type, privacy_record_id, organization_id, engagement_id
+BEFORE INSERT OR UPDATE OF privacy_record_type, privacy_record_id, organization_id, engagement_id, proposed_by
 ON privacy_assurance_candidates FOR EACH ROW EXECUTE FUNCTION validate_privacy_assurance_candidate();
+
+CREATE OR REPLACE FUNCTION validate_privacy_assurance_decider(c privacy_assurance_candidates, actor_id uuid)
+RETURNS void LANGUAGE plpgsql STABLE AS $$
+BEGIN
+  IF actor_id = c.proposed_by THEN RAISE EXCEPTION 'Candidate proposer cannot decide the same candidate'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM memberships m WHERE m.organization_id=c.organization_id AND m.user_id=actor_id AND m.status='ACTIVE') THEN
+    RAISE EXCEPTION 'Candidate decider must be an active member of the organization';
+  END IF;
+END $$;
 
 -- Human acceptance materializes a controlled assurance artifact. It never creates tests, exceptions, findings, risks, or conclusions.
 CREATE OR REPLACE FUNCTION accept_privacy_assurance_candidate(candidate_id uuid, actor_id uuid, decision_reason text)
@@ -85,6 +97,7 @@ BEGIN
   SELECT * INTO c FROM privacy_assurance_candidates WHERE id=candidate_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Privacy assurance candidate not found'; END IF;
   IF c.status <> 'PROPOSED' THEN RAISE EXCEPTION 'Only PROPOSED candidates may be accepted'; END IF;
+  PERFORM validate_privacy_assurance_decider(c, actor_id);
   IF EXISTS (SELECT 1 FROM engagements WHERE id=c.engagement_id AND frozen_at IS NOT NULL) THEN RAISE EXCEPTION 'Frozen engagement cannot accept new assurance work'; END IF;
 
   IF c.candidate_type = 'SCOPE' THEN
@@ -107,12 +120,15 @@ END $$;
 
 CREATE OR REPLACE FUNCTION reject_privacy_assurance_candidate(candidate_id uuid, actor_id uuid, decision_reason text)
 RETURNS void LANGUAGE plpgsql AS $$
+DECLARE c privacy_assurance_candidates%ROWTYPE;
 BEGIN
   IF decision_reason IS NULL OR length(btrim(decision_reason)) = 0 THEN RAISE EXCEPTION 'Decision rationale is required'; END IF;
+  SELECT * INTO c FROM privacy_assurance_candidates WHERE id=candidate_id FOR UPDATE;
+  IF NOT FOUND OR c.status <> 'PROPOSED' THEN RAISE EXCEPTION 'Only an existing PROPOSED candidate may be rejected'; END IF;
+  PERFORM validate_privacy_assurance_decider(c, actor_id);
   UPDATE privacy_assurance_candidates
     SET status='REJECTED', decided_by=actor_id, decided_at=now(), decision_rationale=decision_reason
-  WHERE id=candidate_id AND status='PROPOSED';
-  IF NOT FOUND THEN RAISE EXCEPTION 'Only an existing PROPOSED candidate may be rejected'; END IF;
+  WHERE id=c.id;
 END $$;
 
 COMMENT ON TABLE privacy_assurance_candidates IS 'Human-reviewed bridge from operational privacy truth to audit scope/evidence work. Never an assurance conclusion.';
