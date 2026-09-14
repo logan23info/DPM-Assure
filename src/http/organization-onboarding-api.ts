@@ -108,11 +108,14 @@ export function createOrganizationOnboardingApi(resolver: SessionResolver) {
               if (typeof body.membershipId !== "string") throw new Error("membershipId is required");
               const status = body.status === undefined ? undefined : body.status;
               if (status !== undefined && status !== "ACTIVE" && status !== "INACTIVE") throw new Error("Invalid membership status");
-              return json(await updateOrganizationMember(transaction, {
-                membershipId: uuid(body.membershipId, "membershipId"),
-                role: body.role === undefined ? undefined : role(body.role),
-                status,
-              }));
+              const memberUpdate: {
+                membershipId: string;
+                role?: MembershipRole;
+                status?: "ACTIVE" | "INACTIVE";
+              } = { membershipId: uuid(body.membershipId, "membershipId") };
+              if (body.role !== undefined) memberUpdate.role = role(body.role);
+              if (status !== undefined) memberUpdate.status = status;
+              return json(await updateOrganizationMember(transaction, memberUpdate));
             }
             throw new Error("Unsupported onboarding action");
           },
