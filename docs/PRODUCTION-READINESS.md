@@ -84,11 +84,15 @@ At minimum, a recovery exercise must prove:
 - authentication sessions/tokens can be invalidated if compromise is suspected;
 - required secrets can be rotated independently.
 
+The repository Recovery Contract now performs an automated PostgreSQL logical backup and clean restore, verifies sentinel data and security primitives, reruns the behavioral database contracts against the restored database, and proves the migration chain remains deterministic on another fresh database. Provider-specific encrypted retention, evidence-object restore, and documented production RPO/RTO remain deployment controls.
+
 Document recovery point and recovery time objectives before production launch.
 
 ## 9. Observability
 
-Application logs must not contain magic-link tokens, session cookies, invitation tokens, object-store credentials, signed object URLs, Groq API keys, or full sensitive evidence contents. Correlate operational logs using request IDs and domain/audit event identifiers rather than secrets.
+Application logs must not contain magic-link tokens, session cookies, invitation tokens, object-store credentials, signed object URLs, Groq API keys, full sensitive evidence contents, raw SQL statements, or query parameters. Correlate operational logs using request IDs and domain/audit event identifiers rather than secrets.
+
+HTTP error boundaries must convert controlled database governance failures to stable semantic responses and suppress raw query text and parameter values from client responses.
 
 Production should have error monitoring, uptime/health monitoring, database/storage capacity alarms, email-delivery failure visibility, and alerts for repeated authorization/rate-limit failures without exposing tenant data.
 
@@ -96,4 +100,6 @@ Production should have error monitoring, uptime/health monitoring, database/stor
 
 A release is NO-GO if any required Database Contract, TypeScript Contract, Application Contract, production build, migration determinism check, or security/tenant-isolation test fails. Failures are fixed at the implementation or test-fixture source; controls are not weakened merely to make CI green.
 
-Before public launch, add browser-level end-to-end tests for authentication, role boundaries, cross-tenant denial, the complete assurance lifecycle, client PBC access, private evidence upload/finalization/download, Evidence Gate behavior, audit freeze, and post-freeze immutability.
+The Browser E2E gate now runs the production application against PostgreSQL with a non-owner, non-superuser, non-`BYPASSRLS` runtime role and a private S3-compatible evidence store. It verifies authentication, role boundaries, cross-tenant denial, source-backed framework/control lineage, governance and planning, workpaper/procedure execution, client PBC access, signed private evidence upload and download, server-computed SHA-256, rejection of conclusive testing before the Evidence Gate passes, successful eight-dimension Evidence Gate evaluation, human review/sign-off, report approval, engagement closure, audit freeze, and post-freeze immutability.
+
+This automated browser gate is a required release control. Production provider configuration, TLS/domain activation, encrypted backup retention, observability integrations, and documented RPO/RTO remain environment-specific launch controls and must be verified before public traffic is promoted.
