@@ -17,7 +17,7 @@ test("conclusive test result requires PASS evidence gate", () => {
   assert.doesNotThrow(() => assertConclusiveTestAllowed("PASS", "PASS"));
   assert.throws(() => assertConclusiveTestAllowed("PASS", "INSUFFICIENT_EVIDENCE"));
   assert.throws(() => assertConclusiveTestAllowed("FAIL", null));
-  assert.doesNotThrow(() => assertConclusiveTestAllowed("NOT_TESTED", null));
+  assert.doesNotThrow(() => assertConclusiveTestAllowed("INSUFFICIENT_EVIDENCE", null));
 });
 
 test("evidence registration requires provenance and cryptographic digest", () => {
