@@ -1,0 +1,144 @@
+name: Browser E2E
+
+on:
+  push:
+    branches: [main, release-readiness-browser-e2e]
+    paths:
+      - 'src/**'
+      - 'db/**'
+      - 'e2e/**'
+      - 'package.json'
+      - 'playwright.config.ts'
+      - '.github/workflows/browser-e2e.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'db/**'
+      - 'e2e/**'
+      - 'package.json'
+      - 'playwright.config.ts'
+      - '.github/workflows/browser-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+  APP_BASE_URL: http://127.0.0.1:3000
+  E2E_BASE_URL: http://127.0.0.1:3000
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: dpm_assure_e2e
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d dpm_assure_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package.json
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Apply migrations
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGDATABASE: dpm_assure_e2e
+          PGUSER: postgres
+        run: |
+          set -euo pipefail
+          for migration in db/migrations/*.sql; do
+            echo "Applying ${migration}"
+            psql -v ON_ERROR_STOP=1 -f "${migration}"
+          done
+
+      - name: Seed browser fixtures and non-owner runtime role
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGDATABASE: dpm_assure_e2e
+          PGUSER: postgres
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO organizations(id,name,slug,status) VALUES
+            ('f1000000-0000-4000-8000-000000000001','E2E Admin Organization','e2e-admin-org','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000002','E2E Other Organization','e2e-other-org','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000003','E2E Client Organization','e2e-client-org','ACTIVE');
+
+          INSERT INTO users(id,email,display_name,status) VALUES
+            ('f1000000-0000-4000-8000-000000000011','e2e-admin@example.test','E2E Admin','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000012','e2e-client@example.test','E2E Client','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000013','e2e-other@example.test','E2E Other','ACTIVE');
+
+          INSERT INTO memberships(organization_id,user_id,role,status) VALUES
+            ('f1000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000011','ORG_ADMIN','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000003','f1000000-0000-4000-8000-000000000012','CLIENT','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000002','f1000000-0000-4000-8000-000000000013','ORG_ADMIN','ACTIVE');
+
+          INSERT INTO auth_sessions(user_id,token_hash,expires_at) VALUES
+            ('f1000000-0000-4000-8000-000000000011',encode(digest('e2e-admin-session-token-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours'),
+            ('f1000000-0000-4000-8000-000000000012',encode(digest('e2e-client-session-token-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours');
+
+          INSERT INTO auth_login_tokens(email,token_hash,expires_at) VALUES
+            ('e2e-admin@example.test',encode(digest('e2e-magic-link-token-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '1 hour');
+
+          CREATE ROLE dpm_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+          GRANT CONNECT ON DATABASE dpm_assure_e2e TO dpm_runtime;
+          GRANT USAGE ON SCHEMA public TO dpm_runtime;
+          GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO dpm_runtime;
+          GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO dpm_runtime;
+          GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO dpm_runtime;
+          SQL
+
+      - name: Build production application
+        env:
+          DATABASE_URL: postgresql://dpm_runtime@127.0.0.1:5432/dpm_assure_e2e
+        run: npm run build
+
+      - name: Start application with non-owner runtime role
+        env:
+          DATABASE_URL: postgresql://dpm_runtime@127.0.0.1:5432/dpm_assure_e2e
+        run: |
+          PORT=3000 HOSTNAME=127.0.0.1 node .next/standalone/server.js > /tmp/dpm-e2e.log 2>&1 &
+          echo $! > /tmp/dpm-e2e.pid
+
+      - name: Wait for application
+        run: |
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/dpm-e2e.log
+          exit 1
+
+      - name: Run browser E2E
+        run: npm run test:e2e
+
+      - name: Show server logs on failure
+        if: failure()
+        run: cat /tmp/dpm-e2e.log || true
