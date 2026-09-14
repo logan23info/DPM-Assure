@@ -1,0 +1,163 @@
+import { membershipRole } from "@/db/schema";
+
+export type MembershipRole = (typeof membershipRole.enumValues)[number];
+
+export const permissions = {
+  organizationRead: "organization.read",
+  organizationManageUsers: "organization.manage_users",
+  organizationManageSettings: "organization.manage_settings",
+  engagementRead: "engagement.read",
+  engagementCreate: "engagement.create",
+  engagementUpdate: "engagement.update",
+  engagementClose: "engagement.close",
+  workpaperRead: "workpaper.read",
+  workpaperCreate: "workpaper.create",
+  workpaperUpdate: "workpaper.update",
+  workpaperReview: "workpaper.review",
+  workpaperApprove: "workpaper.approve",
+  evidenceRead: "evidence.read",
+  evidenceUpload: "evidence.upload",
+  evidenceDelete: "evidence.delete",
+  findingRead: "finding.read",
+  findingCreate: "finding.create",
+  findingUpdate: "finding.update",
+  findingClose: "finding.close",
+  reportRead: "report.read",
+  reportGenerate: "report.generate",
+  reportExport: "report.export",
+  reportApprove: "report.approve",
+  auditLogRead: "audit_log.read",
+  aiUse: "ai.use",
+  aiReview: "ai.review",
+  aiPublish: "ai.publish",
+} as const;
+
+export type Permission = (typeof permissions)[keyof typeof permissions];
+
+const allPermissions = Object.freeze(
+  new Set<Permission>(Object.values(permissions)),
+);
+
+const rolePermissions: Readonly<Record<MembershipRole, ReadonlySet<Permission>>> = {
+  SUPER_ADMIN: allPermissions,
+  ORG_ADMIN: allPermissions,
+  AUDIT_MANAGER: new Set([
+    permissions.organizationRead,
+    permissions.engagementRead,
+    permissions.engagementCreate,
+    permissions.engagementUpdate,
+    permissions.engagementClose,
+    permissions.workpaperRead,
+    permissions.workpaperCreate,
+    permissions.workpaperUpdate,
+    permissions.workpaperReview,
+    permissions.workpaperApprove,
+    permissions.evidenceRead,
+    permissions.evidenceUpload,
+    permissions.evidenceDelete,
+    permissions.findingRead,
+    permissions.findingCreate,
+    permissions.findingUpdate,
+    permissions.findingClose,
+    permissions.reportRead,
+    permissions.reportGenerate,
+    permissions.reportExport,
+    permissions.reportApprove,
+    permissions.auditLogRead,
+    permissions.aiUse,
+    permissions.aiReview,
+    permissions.aiPublish,
+  ]),
+  LEAD_AUDITOR: new Set([
+    permissions.organizationRead,
+    permissions.engagementRead,
+    permissions.engagementUpdate,
+    permissions.workpaperRead,
+    permissions.workpaperCreate,
+    permissions.workpaperUpdate,
+    permissions.workpaperReview,
+    permissions.evidenceRead,
+    permissions.evidenceUpload,
+    permissions.findingRead,
+    permissions.findingCreate,
+    permissions.findingUpdate,
+    permissions.reportRead,
+    permissions.reportGenerate,
+    permissions.reportExport,
+    permissions.aiUse,
+    permissions.aiReview,
+  ]),
+  AUDITOR: new Set([
+    permissions.organizationRead,
+    permissions.engagementRead,
+    permissions.workpaperRead,
+    permissions.workpaperCreate,
+    permissions.workpaperUpdate,
+    permissions.evidenceRead,
+    permissions.evidenceUpload,
+    permissions.findingRead,
+    permissions.findingCreate,
+    permissions.findingUpdate,
+    permissions.reportRead,
+    permissions.aiUse,
+  ]),
+  REVIEWER: new Set([
+    permissions.organizationRead,
+    permissions.engagementRead,
+    permissions.workpaperRead,
+    permissions.workpaperReview,
+    permissions.workpaperApprove,
+    permissions.evidenceRead,
+    permissions.findingRead,
+    permissions.findingUpdate,
+    permissions.reportRead,
+    permissions.reportApprove,
+    permissions.auditLogRead,
+    permissions.aiUse,
+    permissions.aiReview,
+    permissions.aiPublish,
+  ]),
+  CLIENT: new Set([
+    permissions.organizationRead,
+    permissions.engagementRead,
+    permissions.workpaperRead,
+    permissions.evidenceRead,
+    permissions.evidenceUpload,
+    permissions.findingRead,
+    permissions.reportRead,
+  ]),
+  VIEWER: new Set([
+    permissions.organizationRead,
+    permissions.engagementRead,
+    permissions.workpaperRead,
+    permissions.evidenceRead,
+    permissions.findingRead,
+    permissions.reportRead,
+  ]),
+};
+
+export class AuthorizationDeniedError extends Error {
+  constructor(
+    readonly role: MembershipRole,
+    readonly permission: Permission,
+  ) {
+    super(`Role ${role} is not authorized for ${permission}`);
+    this.name = "AuthorizationDeniedError";
+  }
+}
+
+export function hasPermission(
+  role: MembershipRole,
+  permission: Permission,
+): boolean {
+  return rolePermissions[role].has(permission);
+}
+
+export function requirePermission(
+  role: MembershipRole,
+  permission: Permission,
+): void {
+  if (!hasPermission(role, permission)) {
+    throw new AuthorizationDeniedError(role, permission);
+  }
+}
