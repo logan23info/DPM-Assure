@@ -1,0 +1,25 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { sql } from "drizzle-orm";
+
+import { getCurrentUserContext } from "@/auth/current-user-context";
+import { withAuthorizedTenantTransaction } from "@/auth/authorize";
+import { permissions } from "@/auth/rbac";
+import { ExecutionClient } from "./ExecutionClient";
+
+export const dynamic="force-dynamic";
+type PageProps={params:Promise<{organizationId:string;engagementId:string}>};
+export default async function ExecutionPage({params}:PageProps){const{organizationId,engagementId}=await params;const current=await getCurrentUserContext();if(!current)redirect("/login");const membership=current.memberships.find(x=>x.organizationId===organizationId);if(!membership)redirect("/dashboard");
+ const snapshot=await withAuthorizedTenantTransaction({principal:current.principal,organizationId,requestId:crypto.randomUUID(),permission:permissions.engagementRead},async(tx)=>{
+  const engagement=await tx.db.execute<{name:string;status:string}>(sql`select name,status::text from engagements where id=${engagementId}::uuid and organization_id=${organizationId}::uuid`);if(!engagement.rows[0])throw new Error("Engagement not found");
+  const requirements=await tx.db.execute<{id:string;requirement_key:string;title:string}>(sql`select a.requirement_id as id,r.requirement_key,r.title from engagement_requirement_applicability a join requirements r on r.id=a.requirement_id where a.engagement_id=${engagementId}::uuid and a.decision='APPLICABLE' order by r.requirement_key`);
+  const scopes=await tx.db.execute<{id:string;name:string}>(sql`select id,name from scopes where engagement_id=${engagementId}::uuid and in_scope=true order by name`);
+  const samples=await tx.db.execute<{id:string;population_description:string;review_status:string;sample_size:string|null}>(sql`select id,population_description,review_status::text,sample_size::text from samples where engagement_id=${engagementId}::uuid order by created_at desc`);
+  const workpapers=await tx.db.execute<{id:string;title:string;status:string}>(sql`select id,title,status::text from workpapers where engagement_id=${engagementId}::uuid order by created_at desc`);
+  const procedures=await tx.db.execute<{id:string;workpaper_id:string;name:string;sequence:number}>(sql`select p.id,p.workpaper_id,p.name,p.sequence from procedures p join workpapers w on w.id=p.workpaper_id where w.engagement_id=${engagementId}::uuid order by p.workpaper_id,p.sequence`);
+  const pbc=await tx.db.execute<{id:string;title:string;status:string;due_at:string|null}>(sql`select id,title,status::text,due_at::text from pbc_requests where engagement_id=${engagementId}::uuid order by created_at desc`);
+  return{engagement:engagement.rows[0],requirements:requirements.rows,scopes:scopes.rows,samples:samples.rows,workpapers:workpapers.rows,procedures:procedures.rows,pbc:pbc.rows};});
+ return <main className="dashboard-shell"><Link className="back-link" href={`/organizations/${organizationId}/engagements/${engagementId}`}>← Engagement</Link><header className="dashboard-header"><div><p className="eyebrow">Assurance execution</p><h1>{snapshot.engagement.name}</h1><p className="lede compact">Sampling, workpapers, procedures and client evidence requests.</p></div><span className="role-badge">{snapshot.engagement.status}</span></header>
+ <section className="monitoring-summary"><article><strong>{snapshot.samples.length}</strong><span>Samples</span></article><article><strong>{snapshot.workpapers.length}</strong><span>Workpapers</span></article><article><strong>{snapshot.pbc.length}</strong><span>PBC requests</span></article></section>
+ <ExecutionClient organizationId={organizationId} engagementId={engagementId} requirements={snapshot.requirements.map(r=>({id:r.id,label:`${r.requirement_key} — ${r.title}`}))} scopes={snapshot.scopes.map(s=>({id:s.id,label:s.name}))} workpapers={snapshot.workpapers.map(w=>({id:w.id,label:w.title}))}/>
+ <section className="workspace-panel"><div className="section-heading"><h2>Execution records</h2></div><div className="organization-grid">{snapshot.samples.map(s=><article className="organization-card" key={s.id}><span className="role-badge">{s.review_status}</span><h3>{s.population_description}</h3><p>Sample size {s.sample_size??"—"}</p></article>)}{snapshot.workpapers.map(w=><article className="organization-card" key={w.id}><span className="role-badge">{w.status}</span><h3>{w.title}</h3><p>{snapshot.procedures.filter(p=>p.workpaper_id===w.id).length} procedures</p></article>)}{snapshot.pbc.map(p=><article className="organization-card" key={p.id}><span className="role-badge">{p.status}</span><h3>{p.title}</h3><p>{p.due_at?`Due ${new Date(p.due_at).toLocaleString()}`:"No due date"}</p></article>)}</div></section></main>;}
