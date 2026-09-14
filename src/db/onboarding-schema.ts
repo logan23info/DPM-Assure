@@ -32,7 +32,7 @@ export const organizationInvitations = pgTable(
   (table) => [
     index("organization_invitations_org_status_idx").on(table.organizationId, table.status, table.expiresAt),
     uniqueIndex("organization_invitations_pending_email_uq")
-      .on(table.organizationId, table.email)
+      .on(table.organizationId, sql`lower(${table.email})`)
       .where(sql`${table.status} = 'PENDING'`),
   ],
 );
