@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { membershipRole, organizations, users } from "./schema";
@@ -32,6 +33,6 @@ export const organizationInvitations = pgTable(
     index("organization_invitations_org_status_idx").on(table.organizationId, table.status, table.expiresAt),
     uniqueIndex("organization_invitations_pending_email_uq")
       .on(table.organizationId, table.email)
-      .where("status = 'PENDING'" as never),
+      .where(sql`${table.status} = 'PENDING'`),
   ],
 );
