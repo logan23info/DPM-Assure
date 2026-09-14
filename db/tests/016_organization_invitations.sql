@@ -7,7 +7,8 @@ INSERT INTO organizations(id,name,slug) VALUES
 INSERT INTO users(id,email,display_name) VALUES
  ('a1000000-0000-0000-0000-000000000001','admin@example.test','Admin'),
  ('a1000000-0000-0000-0000-000000000002','invitee@example.test','Invitee'),
- ('a1000000-0000-0000-0000-000000000003','wrong@example.test','Wrong User');
+ ('a1000000-0000-0000-0000-000000000003','wrong@example.test','Wrong User'),
+ ('a1000000-0000-0000-0000-000000000004','super@example.test','Super Attempt');
 INSERT INTO memberships(organization_id,user_id,role,status) VALUES
  ('a0000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000001','ORG_ADMIN','ACTIVE');
 
@@ -19,7 +20,6 @@ VALUES (
  'a1000000-0000-0000-0000-000000000001',now()+interval '1 day'
 );
 
--- Wrong authenticated email cannot accept.
 SELECT set_config('app.user_id','a1000000-0000-0000-0000-000000000003',true);
 SELECT set_config('app.organization_id','a0000000-0000-0000-0000-000000000001',true);
 DO $$
@@ -32,7 +32,6 @@ BEGIN
   END;
 END $$;
 
--- Correct authenticated user accepts exactly once.
 SELECT set_config('app.user_id','a1000000-0000-0000-0000-000000000002',true);
 SELECT set_config('app.organization_id','a0000000-0000-0000-0000-000000000001',true);
 SELECT accept_organization_invitation(repeat('a',64)::char(64));
@@ -45,7 +44,6 @@ BEGIN
        AND user_id='a1000000-0000-0000-0000-000000000002'
        AND role='AUDITOR' AND status='ACTIVE'
   ) THEN RAISE EXCEPTION 'accepted invite did not create membership'; END IF;
-
   BEGIN
     PERFORM accept_organization_invitation(repeat('a',64)::char(64));
     RAISE EXCEPTION 'expected invitation replay to fail';
@@ -54,7 +52,6 @@ BEGIN
   END;
 END $$;
 
--- Expired invite cannot be accepted.
 INSERT INTO organization_invitations(id,organization_id,email,role,token_hash,invited_by,invited_at,expires_at)
 VALUES (
  'a2000000-0000-0000-0000-000000000002',
@@ -73,14 +70,14 @@ BEGIN
   END;
 END $$;
 
--- SUPER_ADMIN cannot be granted through organization invitation.
 INSERT INTO organization_invitations(id,organization_id,email,role,token_hash,invited_by,expires_at)
 VALUES (
  'a2000000-0000-0000-0000-000000000003',
  'a0000000-0000-0000-0000-000000000001',
- 'wrong@example.test','SUPER_ADMIN',repeat('c',64),
+ 'super@example.test','SUPER_ADMIN',repeat('c',64),
  'a1000000-0000-0000-0000-000000000001',now()+interval '1 day'
 );
+SELECT set_config('app.user_id','a1000000-0000-0000-0000-000000000004',true);
 DO $$
 BEGIN
   BEGIN
@@ -91,7 +88,6 @@ BEGIN
   END;
 END $$;
 
--- Last active ORG_ADMIN cannot be demoted or deactivated.
 DO $$
 BEGIN
   BEGIN
