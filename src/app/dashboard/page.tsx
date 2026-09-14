@@ -1,0 +1,61 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+
+import { getCurrentUserContext } from "@/auth/current-user-context";
+
+export const dynamic = "force-dynamic";
+
+export default async function DashboardPage() {
+  const current = await getCurrentUserContext();
+  if (!current) redirect("/login");
+
+  return (
+    <main className="dashboard-shell">
+      <header className="dashboard-header">
+        <div>
+          <p className="eyebrow">DPM-Assure</p>
+          <h1>Assurance workspace</h1>
+          <p className="lede compact">Signed in as {current.principal.email ?? current.principal.userId}</p>
+        </div>
+        <form action="/api/auth/logout" method="post">
+          <button className="secondary-button" type="submit">Sign out</button>
+        </form>
+      </header>
+
+      <section className="workspace-panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Authorized organizations</p>
+            <h2>Select an organization</h2>
+          </div>
+          <span className="count-badge">{current.memberships.length}</span>
+        </div>
+
+        {current.memberships.length === 0 ? (
+          <div className="empty-state">
+            <strong>No active organization membership</strong>
+            <p>Your account is valid, but no active tenant membership is assigned. An organization administrator must grant access.</p>
+          </div>
+        ) : (
+          <div className="organization-grid">
+            {current.memberships.map((membership) => (
+              <article className="organization-card" key={membership.organizationId}>
+                <div>
+                  <span className="role-badge">{membership.role.replaceAll("_", " ")}</span>
+                  <h3>{membership.organizationName}</h3>
+                  <p>{membership.organizationSlug}</p>
+                </div>
+                <Link
+                  className="primary-link"
+                  href={`/organizations/${membership.organizationId}/compliance/monitoring`}
+                >
+                  Open compliance monitoring
+                </Link>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
