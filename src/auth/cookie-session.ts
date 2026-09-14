@@ -56,20 +56,13 @@ export async function resolveSessionToken(rawToken: string | null | undefined): 
 
   const tokenHash = sha256(rawToken);
   const result = await getPool().query<{
-    id: string;
+    session_id: string;
     user_id: string;
     email: string;
     issued_at: Date;
     expires_at: Date;
   }>(
-    `select s.id, s.user_id, u.email, s.issued_at, s.expires_at
-       from auth_sessions s
-       join users u on u.id = s.user_id
-      where s.token_hash = $1
-        and s.revoked_at is null
-        and s.expires_at > now()
-        and u.status = 'ACTIVE'
-      limit 1`,
+    "select session_id, user_id, email, issued_at, expires_at from auth_resolve_session($1::char(64))",
     [tokenHash],
   );
 
@@ -78,12 +71,12 @@ export async function resolveSessionToken(rawToken: string | null | undefined): 
 
   void getPool().query(
     "update auth_sessions set last_seen_at = now() where id = $1 and revoked_at is null",
-    [row.id],
+    [row.session_id],
   ).catch(() => undefined);
 
   return {
     userId: row.user_id,
-    sessionId: row.id,
+    sessionId: row.session_id,
     email: row.email,
     issuedAt: new Date(row.issued_at),
     expiresAt: new Date(row.expires_at),
