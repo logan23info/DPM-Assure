@@ -6,13 +6,14 @@ const ORG_CLIENT = "f1000000-0000-4000-8000-000000000003";
 const ADMIN_SESSION = "e2e-admin-session-token-abcdefghijklmnopqrstuvwxyz1234567890";
 const CLIENT_SESSION = "e2e-client-session-token-abcdefghijklmnopqrstuvwxyz1234567890";
 const MAGIC_TOKEN = "e2e-magic-link-token-abcdefghijklmnopqrstuvwxyz1234567890";
+const BASE_URL = "http://127.0.0.1:3000";
 
 async function setSession(context: BrowserContext, value: string) {
   await context.addCookies([
     {
       name: "dpm_session",
       value,
-      url: "http://127.0.0.1:3000",
+      url: BASE_URL,
       httpOnly: true,
       sameSite: "Lax",
     },
@@ -49,8 +50,9 @@ test("ORG_ADMIN resolves only its memberships under non-owner RLS", async ({ con
   await expect(page.getByRole("link", { name: "Open assurance engagements" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Manage members" })).toBeVisible();
 
-  await page.goto(`/organizations/${ORG_OTHER}/members`);
-  await expect(page).toHaveURL(/\/dashboard$/);
+  const denied = await page.goto(`/organizations/${ORG_OTHER}/members`);
+  expect(denied?.status()).toBe(404);
+  await expect(page.getByText("E2E Other Organization")).toHaveCount(0);
 
   await page.goto(`/organizations/${ORG_ADMIN}/members`);
   await expect(page).toHaveURL(new RegExp(`/organizations/${ORG_ADMIN}/members$`));
@@ -70,12 +72,24 @@ test("CLIENT sees only restricted client workflow entry points", async ({ contex
   await expect(page).toHaveURL(new RegExp(`/organizations/${ORG_CLIENT}/client-portal$`));
 });
 
-test("logout revokes the active session", async ({ context, page }) => {
-  await setSession(context, ADMIN_SESSION);
-  await page.goto("/dashboard");
-  await page.getByRole("button", { name: "Sign out" }).click();
-  await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/login$/);
+test("logout revokes the active server session", async ({ request }) => {
+  const cookie = `dpm_session=${ADMIN_SESSION}`;
+  const logout = await request.post("/api/auth/logout", {
+    headers: {
+      cookie,
+      origin: BASE_URL,
+      "sec-fetch-site": "same-origin",
+    },
+    maxRedirects: 0,
+  });
+  expect([302, 303, 307, 308]).toContain(logout.status());
+
+  const dashboard = await request.get("/dashboard", {
+    headers: { cookie },
+    maxRedirects: 0,
+  });
+  expect([302, 303, 307, 308]).toContain(dashboard.status());
+  expect(dashboard.headers()["location"] ?? "").toContain("/login");
 });
 
 test("browser security policy blocks cross-site mutations", async ({ request }) => {
