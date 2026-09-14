@@ -22,7 +22,7 @@ async function setSession(context: BrowserContext, value: string) {
 test("anonymous users are redirected to login", async ({ page }) => {
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("heading", { name: /sign in/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /passwordless sign-in/i })).toBeVisible();
 });
 
 test("magic link is single-use and creates a server session", async ({ request }) => {
