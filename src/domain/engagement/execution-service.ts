@@ -88,6 +88,18 @@ export async function createWorkpaper(transaction: AuthorizedTenantTransaction, 
   await recordDomainChange(transaction,{eventType:"engagement.workpaper.created",aggregateType:"engagement",aggregateId:engagementId,action:"engagement.workpaper.create",entityType:"workpaper",entityId:row.id,payload:{controlId},newValues:{title}}); return row;
 }
 
+export async function updateWorkpaper(transaction: AuthorizedTenantTransaction, input: Record<string, unknown>) {
+  requirePermission(transaction.membership.role, permissions.workpaperUpdate);
+  const workpaperId=uuid(input.workpaperId,"workpaperId"); const title=requiredText(input.title,"title",500);
+  const row=(await transaction.db.execute<{engagement_id:string;status:string}>(sql`select w.engagement_id,e.status::text from workpapers w join engagements e on e.id=w.engagement_id where w.id=${workpaperId}::uuid and w.organization_id=${transaction.context.organizationId}::uuid`)).rows[0];
+  if(!row) throw new EngagementExecutionError("Workpaper not found");
+  if(row.status!=="TESTING") throw new EngagementExecutionError(`Workpaper editing is only allowed in TESTING; current status is ${row.status}`);
+  const current=(await transaction.db.execute<{version:number}>(sql`select coalesce(max(version_number),0)::int version from workpaper_versions where workpaper_id=${workpaperId}::uuid`)).rows[0]; const version=(current?.version??0)+1;
+  await transaction.db.execute(sql`update workpapers set title=${title},updated_at=now() where id=${workpaperId}::uuid`);
+  await transaction.db.execute(sql`insert into workpaper_versions(workpaper_id,version_number,content,changed_by,change_reason) values(${workpaperId}::uuid,${version},jsonb_build_object('title',${title}),${transaction.principal.userId}::uuid,${requiredText(input.changeReason??"Workpaper update","changeReason",2000)})`);
+  await recordDomainChange(transaction,{eventType:"engagement.workpaper.updated",aggregateType:"engagement",aggregateId:row.engagement_id,action:"engagement.workpaper.update",entityType:"workpaper",entityId:workpaperId,payload:{version},newValues:{title}}); return {id:workpaperId,title,version};
+}
+
 export async function linkWorkpaperRequirement(transaction: AuthorizedTenantTransaction,input:LinkWorkpaperRequirementInput){requirePermission(transaction.membership.role,permissions.workpaperUpdate);const v=validateLinkWorkpaperRequirementInput(input);const wp=await transaction.db.execute<{engagement_id:string}>(sql`select engagement_id from workpapers where id=${v.workpaperId}::uuid and organization_id=${transaction.context.organizationId}::uuid`);const engagementId=wp.rows[0]?.engagement_id;if(!engagementId)throw new EngagementExecutionError("Workpaper not found");await requireTesting(transaction,engagementId);const result=await transaction.db.execute<{id:string}>(sql`insert into workpaper_requirement_links (organization_id,engagement_id,workpaper_id,applicability_id,requirement_id,control_id,linked_by) values (${transaction.context.organizationId}::uuid,${engagementId}::uuid,${v.workpaperId}::uuid,${v.applicabilityId}::uuid,${v.requirementId}::uuid,${v.controlId}::uuid,${transaction.principal.userId}::uuid) returning id`);const row=result.rows[0];if(!row)throw new EngagementExecutionError("Requirement link failed");return row;}
 
 export async function linkWorkpaperSample(transaction:AuthorizedTenantTransaction,input:LinkWorkpaperSampleInput){requirePermission(transaction.membership.role,permissions.workpaperUpdate);const v=validateLinkWorkpaperSampleInput(input);await transaction.db.execute(sql`insert into workpaper_sample_links(workpaper_id,sample_id,linked_by) values (${v.workpaperId}::uuid,${v.sampleId}::uuid,${transaction.principal.userId}::uuid)`);return v;}
