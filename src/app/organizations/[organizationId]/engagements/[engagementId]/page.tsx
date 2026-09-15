@@ -8,6 +8,7 @@ import { permissions } from "@/auth/rbac";
 import { getGovernanceReadiness } from "@/domain/engagement/governance-service";
 import { getScopeReadiness } from "@/domain/engagement/scope-service";
 import { GovernanceClient } from "./GovernanceClient";
+import { DeleteEngagement } from "./DeleteEngagement";
 
 export const dynamic = "force-dynamic";
 type PageProps = { params: Promise<{ organizationId: string; engagementId: string }> };
@@ -34,5 +35,6 @@ export default async function EngagementGovernancePage({ params }: PageProps) {
     <section className="monitoring-summary"><article><strong>{snapshot.assignments.filter((item) => item.active).length}</strong><span>Active assignees</span></article><article><strong>{snapshot.checks.filter((item) => item.result === "CONFLICT" && !item.resolved_at).length}</strong><span>Open conflicts</span></article><article><strong>{snapshot.governanceReady ? "Yes" : "No"}</strong><span>Governance ready</span></article><article><strong>{snapshot.scopeReady ? "Yes" : "No"}</strong><span>Scope ready</span></article></section>
     {snapshot.risks.length > 0 ? <section className="workspace-panel"><div className="section-heading"><div><p className="eyebrow">Risk history</p><h2>Recent preliminary assessments</h2></div></div><div className="signal-list">{snapshot.risks.map((risk) => <article className="signal-card" key={risk.id}><div className="signal-meta"><span>{risk.method_version}</span><span>{new Date(risk.assessed_at).toLocaleString()}</span></div><p>{risk.rationale}</p><small>Inherent {risk.inherent_score ?? "—"} · Control {risk.control_score ?? "—"} · Residual {risk.residual_score ?? "—"}</small></article>)}</div></section> : null}
     <GovernanceClient organizationId={organizationId} engagementId={engagementId} status={snapshot.engagement.status} ready={snapshot.ready} assignees={snapshot.assignees.map((item) => ({ userId: item.user_id, email: item.email, displayName: item.display_name, role: item.role }))} assignments={snapshot.assignments.map((item) => ({ id: item.id, userId: item.user_id, email: item.email, role: item.role, active: item.active }))} checks={snapshot.checks.map((item) => ({ id: item.id, subjectUserId: item.subject_user_id, email: item.email, result: item.result, conflictDetails: item.conflict_details, resolvedAt: item.resolved_at }))} plans={snapshot.plans.map((item) => ({ id: item.id, version: item.version, status: item.status, objectives: item.objectives, createdBy: item.created_by, approvedBy: item.approved_by }))} />
+    <DeleteEngagement organizationId={organizationId} engagementId={engagementId} name={snapshot.engagement.name} status={snapshot.engagement.status} />
   </main>;
 }
