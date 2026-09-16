@@ -36,6 +36,8 @@ import {
   activateProcessor,
   approveInProgressDpia,
   approveTransfer,
+  closeProcessingActivity,
+  closeTransfer,
   suspendProcessor,
   startDpiaAssessment,
   submitTransferForReview,
@@ -270,6 +272,8 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
               }
               case "activate_activity":
                 return json(await activateProcessingActivity(tx, requiredText(body, "activityId"), optionalDate(body, "nextReviewAt")));
+              case "close_activity":
+                return json(await closeProcessingActivity(tx, requiredText(body, "activityId")));
               case "start_dpia":
                 return json(await startDpiaAssessment(tx, requiredText(body, "dpiaId")));
               case "approve_dpia":
@@ -292,6 +296,8 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
                 return json(await submitTransferForReview(tx, requiredText(body, "transferId")));
               case "approve_transfer":
                 return json(await approveTransfer(tx, requiredText(body, "transferId"), optionalDate(body, "nextReviewAt")));
+              case "close_transfer":
+                return json(await closeTransfer(tx, requiredText(body, "transferId")));
               case "transition_dsr": {
                 const identityVerifiedAt = optionalDate(body, "identityVerifiedAt");
                 const outcome = optionalText(body, "outcome");

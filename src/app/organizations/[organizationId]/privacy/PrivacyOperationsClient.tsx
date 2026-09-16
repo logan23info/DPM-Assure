@@ -224,7 +224,8 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     <Panel
       title="ROPA / processing activities"
       items={activities}
-      actions={(item) => item.state !== "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => approveWithReview("activate_activity", "activityId", item.id)}>Activate</button> : null}
+      actions={(item) => item.state === "DRAFT" ? <button type="button" className="secondary-button" onClick={() => approveWithReview("activate_activity", "activityId", item.id)}>Activate</button>
+        : item.state === "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => transition("close_activity", "activityId", item.id)}>Close activity</button> : null}
       render={<form className="privacy-form" onSubmit={(event) => submit(event, "create_activity")}>
         <input name="name" required placeholder="Processing activity name" />
         <input name="purpose" required placeholder="Purpose" />
@@ -266,6 +267,8 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
           ? <button type="button" className="secondary-button" onClick={() => transition("submit_transfer", "transferId", item.id)}>Send for review</button>
           : item.destinationCountry && item.state === "UNDER_REVIEW"
             ? <button type="button" className="secondary-button" onClick={() => approveWithReview("approve_transfer", "transferId", item.id)}>Approve transfer</button>
+            : item.destinationCountry && item.state === "ACTIVE"
+              ? <button type="button" className="secondary-button" onClick={() => transition("close_transfer", "transferId", item.id)}>Close transfer</button>
             : null}
       render={<>
         <form className="privacy-form" onSubmit={(event) => submit(event, "create_processor")}>

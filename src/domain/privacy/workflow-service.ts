@@ -36,6 +36,10 @@ export async function activateProcessingActivity(
     )).limit(1),
     "Processing activity",
   );
+  if (candidate.state !== "DRAFT") throw new Error(`Only a DRAFT processing activity can be activated; current state is ${candidate.state}`);
+  if (candidate.createdBy === transaction.principal.userId) {
+    throw new Error("Processing activity creator cannot approve the same processing activity");
+  }
   const now = new Date();
   const [updated] = await transaction.db.update(processingActivities).set({
     state: "ACTIVE",
@@ -52,6 +56,37 @@ export async function activateProcessingActivity(
     entityType: "processing_activity",
     oldValues: { state: candidate.state },
     newValues: { state: updated.state, reviewedBy: updated.reviewedBy, nextReviewAt: updated.nextReviewAt },
+    payload: { processingActivityId: updated.id, state: updated.state },
+  });
+  return updated;
+}
+
+export async function closeProcessingActivity(
+  transaction: AuthorizedTenantTransaction,
+  activityId: string,
+) {
+  requirePermission(transaction.membership.role, permissions.privacyManage);
+  const candidate = await requireTenantRecord(
+    await transaction.db.select().from(processingActivities).where(and(
+      eq(processingActivities.id, activityId),
+      eq(processingActivities.organizationId, transaction.context.organizationId),
+    )).limit(1),
+    "Processing activity",
+  );
+  if (candidate.state !== "ACTIVE") throw new Error("Only an ACTIVE processing activity can be closed");
+  const [updated] = await transaction.db.update(processingActivities).set({
+    state: "CLOSED",
+    updatedAt: new Date(),
+  }).where(eq(processingActivities.id, candidate.id)).returning();
+  if (!updated) throw new Error("Processing activity closure did not return a row");
+  await recordDomainChange(transaction, {
+    eventType: "privacy.processing_activity.closed",
+    aggregateType: "processing_activity",
+    aggregateId: updated.id,
+    action: "privacy.processing_activity.close",
+    entityType: "processing_activity",
+    oldValues: { state: candidate.state },
+    newValues: { state: updated.state },
     payload: { processingActivityId: updated.id, state: updated.state },
   });
   return updated;
@@ -307,6 +342,37 @@ export async function approveTransfer(
     entityType: "international_transfer",
     oldValues: { state: candidate.state },
     newValues: { state: updated.state, approvedBy: updated.approvedBy, nextReviewAt: updated.nextReviewAt },
+    payload: { transferId: updated.id, state: updated.state },
+  });
+  return updated;
+}
+
+export async function closeTransfer(
+  transaction: AuthorizedTenantTransaction,
+  transferId: string,
+) {
+  requirePermission(transaction.membership.role, permissions.privacyManage);
+  const candidate = await requireTenantRecord(
+    await transaction.db.select().from(internationalTransfers).where(and(
+      eq(internationalTransfers.id, transferId),
+      eq(internationalTransfers.organizationId, transaction.context.organizationId),
+    )).limit(1),
+    "International transfer",
+  );
+  if (candidate.state !== "ACTIVE") throw new Error("Only an ACTIVE international transfer can be closed");
+  const [updated] = await transaction.db.update(internationalTransfers).set({
+    state: "CLOSED",
+    updatedAt: new Date(),
+  }).where(eq(internationalTransfers.id, candidate.id)).returning();
+  if (!updated) throw new Error("International transfer closure did not return a row");
+  await recordDomainChange(transaction, {
+    eventType: "privacy.transfer.closed",
+    aggregateType: "international_transfer",
+    aggregateId: updated.id,
+    action: "privacy.transfer.close",
+    entityType: "international_transfer",
+    oldValues: { state: candidate.state },
+    newValues: { state: updated.state },
     payload: { transferId: updated.id, state: updated.state },
   });
   return updated;
