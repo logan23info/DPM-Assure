@@ -18,6 +18,8 @@ type Item = {
   approvedAt?: string | null;
   alertType?: string;
   severity?: string;
+  dataCategory?: string;
+  purpose?: string;
 };
 
 type Data = {
@@ -294,7 +296,7 @@ function Panel({ title, items, render, actions }: { title: string; items: Item[]
     {render}
     <div className="data-list">
       {items.length ? items.map((item) => <article className="data-row" key={item.id}>
-        <div><strong>{item.suggestedTitle ?? item.name ?? item.title ?? item.destinationCountry ?? item.requestType ?? item.alertType ?? "Privacy record"}</strong><span>{item.state ?? item.status ?? item.decision ?? item.severity ?? item.candidateType ?? "Recorded"}</span></div>
+        <div><strong>{item.suggestedTitle ?? item.name ?? item.title ?? item.destinationCountry ?? item.dataCategory ?? item.purpose ?? item.requestType ?? item.alertType ?? "Privacy record"}</strong><span>{item.state ?? item.status ?? item.decision ?? item.severity ?? item.candidateType ?? "Recorded"}</span></div>
         {actions?.(item)}
       </article>) : <div className="empty-state">No records yet.</div>}
     </div>
