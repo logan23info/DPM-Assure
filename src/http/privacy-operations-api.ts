@@ -1,6 +1,6 @@
 import "server-only";
 
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { withAuthorizedTenantTransaction } from "@/auth/authorize";
 import {
@@ -9,7 +9,8 @@ import {
   type SessionResolver,
 } from "@/auth/session";
 import { AuthorizationDeniedError, permissions } from "@/auth/rbac";
-import { clients } from "@/db/schema";
+import { clients, engagements } from "@/db/schema";
+import { privacyAssuranceCandidates } from "@/db/privacy-assurance-schema";
 import {
   dataSubjectRequests,
   dpiaAssessments,
@@ -36,6 +37,12 @@ import {
   transitionDsr,
   transitionPrivacyBreach,
 } from "@/domain/privacy/workflow-service";
+import {
+  acceptPrivacyAssuranceCandidate,
+  proposePrivacyAssuranceCandidate,
+  rejectPrivacyAssuranceCandidate,
+} from "@/domain/privacy/assurance-integration-service";
+import type { ProposePrivacyAssuranceCandidateInput } from "@/domain/privacy/assurance-integration-validation";
 import type {
   CreateDpiaInput,
   CreateDsrInput,
@@ -77,6 +84,25 @@ function errorResponse(error: unknown) {
   return json({ error: "INVALID_REQUEST", message: error instanceof Error ? error.message : "Request failed" }, 400);
 }
 
+async function requirePrivacyRecordInOrganization(
+  transaction: Parameters<typeof proposePrivacyAssuranceCandidate>[0],
+  type: ProposePrivacyAssuranceCandidateInput["privacyRecordType"],
+  recordId: string,
+) {
+  const organizationId = transaction.context.organizationId;
+  let records: { id: string }[];
+  switch (type) {
+    case "PROCESSING_ACTIVITY": records = await transaction.db.select({ id: processingActivities.id }).from(processingActivities).where(and(eq(processingActivities.id, recordId), eq(processingActivities.organizationId, organizationId))).limit(1); break;
+    case "DPIA": records = await transaction.db.select({ id: dpiaAssessments.id }).from(dpiaAssessments).where(and(eq(dpiaAssessments.id, recordId), eq(dpiaAssessments.organizationId, organizationId))).limit(1); break;
+    case "PROCESSOR": records = await transaction.db.select({ id: processors.id }).from(processors).where(and(eq(processors.id, recordId), eq(processors.organizationId, organizationId))).limit(1); break;
+    case "TRANSFER": records = await transaction.db.select({ id: internationalTransfers.id }).from(internationalTransfers).where(and(eq(internationalTransfers.id, recordId), eq(internationalTransfers.organizationId, organizationId))).limit(1); break;
+    case "DSR": records = await transaction.db.select({ id: dataSubjectRequests.id }).from(dataSubjectRequests).where(and(eq(dataSubjectRequests.id, recordId), eq(dataSubjectRequests.organizationId, organizationId))).limit(1); break;
+    case "BREACH": records = await transaction.db.select({ id: privacyBreaches.id }).from(privacyBreaches).where(and(eq(privacyBreaches.id, recordId), eq(privacyBreaches.organizationId, organizationId))).limit(1); break;
+    default: throw new Error("This privacy record type cannot be linked to assurance work yet");
+  }
+  if (!records[0]) throw new Error("Privacy record was not found in the authorized organization");
+}
+
 export function createPrivacyOperationsApi(resolver: SessionResolver) {
   return {
     async get(organizationId: string) {
@@ -88,6 +114,10 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
           async (tx) => json({
             clients: await tx.db.select({ id: clients.id, name: clients.name }).from(clients)
               .where(eq(clients.organizationId, organizationId)),
+            engagements: await tx.db.select({ id: engagements.id, name: engagements.name, status: engagements.status }).from(engagements)
+              .where(eq(engagements.organizationId, organizationId)).orderBy(desc(engagements.createdAt)),
+            assuranceCandidates: await tx.db.select().from(privacyAssuranceCandidates)
+              .where(eq(privacyAssuranceCandidates.organizationId, organizationId)).orderBy(desc(privacyAssuranceCandidates.proposedAt)),
             activities: await tx.db.select().from(processingActivities)
               .where(eq(processingActivities.organizationId, organizationId)).orderBy(desc(processingActivities.createdAt)),
             dpias: await tx.db.select().from(dpiaAssessments)
@@ -244,6 +274,24 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
                   ...(subjectsNotifiedAt ? { subjectsNotifiedAt } : {}),
                 }));
               }
+              case "propose_assurance_candidate": {
+                const suggestedEvidence = optionalText(body, "suggestedEvidence");
+                const input: ProposePrivacyAssuranceCandidateInput = {
+                  engagementId: requiredText(body, "engagementId"),
+                  privacyRecordType: requiredText(body, "privacyRecordType") as ProposePrivacyAssuranceCandidateInput["privacyRecordType"],
+                  privacyRecordId: requiredText(body, "privacyRecordId"),
+                  candidateType: requiredText(body, "candidateType") as ProposePrivacyAssuranceCandidateInput["candidateType"],
+                  suggestedTitle: requiredText(body, "suggestedTitle"),
+                  rationale: requiredText(body, "rationale"),
+                  ...(suggestedEvidence ? { suggestedEvidence } : {}),
+                };
+                await requirePrivacyRecordInOrganization(tx, input.privacyRecordType, input.privacyRecordId);
+                return json(await proposePrivacyAssuranceCandidate(tx, input), 201);
+              }
+              case "accept_assurance_candidate":
+                return json(await acceptPrivacyAssuranceCandidate(tx, requiredText(body, "candidateId"), requiredText(body, "rationale")));
+              case "reject_assurance_candidate":
+                return json(await rejectPrivacyAssuranceCandidate(tx, requiredText(body, "candidateId"), requiredText(body, "rationale")));
               default:
                 throw new Error("Unsupported privacy operation");
             }

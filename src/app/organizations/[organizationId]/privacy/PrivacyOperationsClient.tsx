@@ -11,10 +11,15 @@ type Item = {
   decision?: string;
   destinationCountry?: string;
   requestType?: string;
+  privacyRecordType?: string;
+  candidateType?: string;
+  suggestedTitle?: string;
 };
 
 type Data = {
   clients: { id: string; name: string }[];
+  engagements: { id: string; name: string; status: string }[];
+  assuranceCandidates: Item[];
   activities: Item[];
   dpias: Item[];
   processors: Item[];
@@ -63,6 +68,14 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
       body.detectedAt = new Date().toISOString();
       body.notificationRequired = form.get("notificationRequired") === "on";
     }
+    if (action === "propose_assurance_candidate") {
+      const record = privacyRecords.find((item) => item.id === body.privacyRecordId);
+      if (!record?.privacyRecordType) {
+        setMessage("Select a privacy record before proposing assurance work.");
+        return;
+      }
+      body.privacyRecordType = record.privacyRecordType;
+    }
     try {
       await send(body);
       event.currentTarget.reset();
@@ -84,7 +97,28 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     }
   }
 
+  async function decideCandidate(candidateId: string, action: "accept_assurance_candidate" | "reject_assurance_candidate") {
+    const rationale = window.prompt(action === "accept_assurance_candidate" ? "Why should this candidate be accepted?" : "Why should this candidate be rejected?");
+    if (!rationale?.trim()) return;
+    setMessage("Recording independent assurance decision…");
+    try {
+      await send({ action, candidateId, rationale });
+      await load();
+      setMessage("Assurance decision recorded.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not record assurance decision");
+    }
+  }
+
   const activities = data?.activities ?? [];
+  const privacyRecords = [
+    ...activities.map((item) => ({ ...item, privacyRecordType: "PROCESSING_ACTIVITY" })),
+    ...(data?.dpias ?? []).map((item) => ({ ...item, privacyRecordType: "DPIA" })),
+    ...(data?.processors ?? []).map((item) => ({ ...item, privacyRecordType: "PROCESSOR" })),
+    ...(data?.transfers ?? []).map((item) => ({ ...item, privacyRecordType: "TRANSFER" })),
+    ...(data?.dsrs ?? []).map((item) => ({ ...item, privacyRecordType: "DSR" })),
+    ...(data?.breaches ?? []).map((item) => ({ ...item, privacyRecordType: "BREACH" })),
+  ];
   return <div className="admin-stack">
     <p className="form-message" role="status">{message}</p>
     <Panel
@@ -182,6 +216,23 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
         </form>
       </>}
     />
+    <Panel
+      title="Assurance linkage"
+      items={data?.assuranceCandidates ?? []}
+      actions={(item) => item.status === "PROPOSED" ? <>
+        <button type="button" className="secondary-button" onClick={() => decideCandidate(item.id, "accept_assurance_candidate")}>Accept</button>
+        <button type="button" className="secondary-button" onClick={() => decideCandidate(item.id, "reject_assurance_candidate")}>Reject</button>
+      </> : null}
+      render={<form className="privacy-form" onSubmit={(event) => submit(event, "propose_assurance_candidate")}>
+        <select name="engagementId" required defaultValue=""><option value="" disabled>Select assurance engagement</option>{data?.engagements.map((engagement) => <option key={engagement.id} value={engagement.id}>{engagement.name} ({engagement.status})</option>)}</select>
+        <select name="privacyRecordId" required defaultValue=""><option value="" disabled>Select privacy record</option>{privacyRecords.map((record) => <option key={`${record.privacyRecordType}:${record.id}`} value={record.id}>{record.privacyRecordType}: {record.name ?? record.title ?? record.destinationCountry ?? record.requestType ?? record.id}</option>)}</select>
+        <select name="candidateType"><option>SCOPE</option><option>EVIDENCE_REQUEST</option></select>
+        <input name="suggestedTitle" required placeholder="Suggested scope or evidence title" />
+        <input name="rationale" required placeholder="Why this belongs in assurance work" />
+        <input name="suggestedEvidence" placeholder="Suggested evidence, required for evidence request" />
+        <button className="primary-button">Propose for assurance review</button>
+      </form>}
+    />
   </div>;
 }
 
@@ -191,7 +242,7 @@ function Panel({ title, items, render, actions }: { title: string; items: Item[]
     {render}
     <div className="data-list">
       {items.length ? items.map((item) => <article className="data-row" key={item.id}>
-        <div><strong>{item.name ?? item.title ?? item.destinationCountry ?? item.requestType ?? "Privacy record"}</strong><span>{item.state ?? item.status ?? item.decision ?? "Recorded"}</span></div>
+        <div><strong>{item.suggestedTitle ?? item.name ?? item.title ?? item.destinationCountry ?? item.requestType ?? "Privacy record"}</strong><span>{item.state ?? item.status ?? item.decision ?? item.candidateType ?? "Recorded"}</span></div>
         {actions?.(item)}
       </article>) : <div className="empty-state">No records yet.</div>}
     </div>
