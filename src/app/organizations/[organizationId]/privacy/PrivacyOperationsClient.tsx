@@ -342,6 +342,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
       items={[...(data?.retentionRules ?? []), ...(data?.notices ?? []), ...(data?.consents ?? [])]}
       actions={(item) => item.noticeKey && !item.approvedAt ? <button type="button" className="secondary-button" onClick={() => transition("approve_notice", "noticeId", item.id)}>Approve notice</button>
         : item.noticeKey && item.approvedAt && !item.retiredAt ? <button type="button" className="secondary-button" onClick={() => transition("retire_notice", "noticeId", item.id)}>Retire notice</button>
+        : item.dataCategory && item.state === "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => transition("retire_retention_rule", "retentionRuleId", item.id)}>Retire retention rule</button>
         : item.status === "GIVEN" ? <button type="button" className="secondary-button" onClick={() => transition("withdraw_consent", "consentId", item.id)}>Withdraw consent</button> : null}
       render={<>
         <form className="privacy-form" onSubmit={(event) => submit(event, "create_retention_rule")}>

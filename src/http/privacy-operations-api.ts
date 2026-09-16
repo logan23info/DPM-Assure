@@ -57,6 +57,7 @@ import {
   recordConsent,
   registerPrivacyNotice,
   retirePrivacyNotice,
+  retireRetentionRule,
   withdrawConsent,
 } from "@/domain/privacy/operational-service";
 import {
@@ -349,6 +350,8 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
                   ...(legalBasisReference ? { legalBasisReference } : {}),
                 }), 201);
               }
+              case "retire_retention_rule":
+                return json(await retireRetentionRule(tx, requiredText(body, "retentionRuleId")));
               case "register_notice": {
                 const effectiveAt = optionalText(body, "effectiveAt");
                 return json(await registerPrivacyNotice(tx, {

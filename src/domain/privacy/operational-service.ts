@@ -70,6 +70,25 @@ export async function createRetentionRule(transaction: AuthorizedTenantTransacti
   return created;
 }
 
+export async function retireRetentionRule(transaction: AuthorizedTenantTransaction, retentionRuleId: string) {
+  requirePermission(transaction.membership.role, permissions.privacyManage);
+  const [candidate] = await transaction.db.select().from(retentionRules).where(and(
+    eq(retentionRules.id, retentionRuleId), eq(retentionRules.organizationId, transaction.context.organizationId),
+  )).limit(1);
+  if (!candidate) throw new Error("Retention rule was not found in the authorized organization");
+  if (candidate.state !== "ACTIVE") throw new Error(`Only an ACTIVE retention rule can be retired; current state is ${candidate.state}`);
+  const [retired] = await transaction.db.update(retentionRules).set({ state: "ARCHIVED", updatedAt: new Date() })
+    .where(eq(retentionRules.id, candidate.id)).returning();
+  if (!retired) throw new Error("Retention rule retirement did not return a row");
+  await recordDomainChange(transaction, {
+    eventType: "privacy.retention_rule.retired", aggregateType: "retention_rule", aggregateId: retired.id,
+    action: "privacy.retention_rule.retire", entityType: "retention_rule",
+    oldValues: { state: candidate.state }, newValues: { state: retired.state },
+    payload: { retentionRuleId: retired.id, processingActivityId: retired.processingActivityId, state: retired.state },
+  });
+  return retired;
+}
+
 export async function registerPrivacyNotice(transaction: AuthorizedTenantTransaction, input: {
   noticeKey: string;
   title: string;
