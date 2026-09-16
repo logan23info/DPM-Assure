@@ -61,7 +61,15 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const output = await response.json() as { message?: string };
+    const raw = await response.text();
+    let output: { message?: string } = {};
+    if (raw.trim()) {
+      try {
+        output = JSON.parse(raw) as { message?: string };
+      } catch {
+        output = { message: raw.trim() };
+      }
+    }
     if (!response.ok) throw new Error(output.message ?? "The governed change could not be saved");
   }
 
