@@ -395,11 +395,28 @@ export async function transitionDsr(
     )).limit(1),
     "Data subject request",
   );
+  const permittedTransitions: Record<string, readonly string[]> = {
+    RECEIVED: ["IDENTITY_VERIFICATION"],
+    IDENTITY_VERIFICATION: ["IN_PROGRESS", "ON_HOLD", "REJECTED"],
+    ON_HOLD: ["IN_PROGRESS", "CANCELLED"],
+    IN_PROGRESS: ["ON_HOLD", "COMPLETED", "REJECTED"],
+  };
+  if (!permittedTransitions[candidate.status]?.includes(update.status)) {
+    throw new Error(`DSR cannot transition from ${candidate.status} to ${update.status}`);
+  }
+  const identityVerifiedAt = update.identityVerifiedAt ?? candidate.identityVerifiedAt;
+  if (["IN_PROGRESS", "COMPLETED"].includes(update.status) && !identityVerifiedAt) {
+    throw new Error("Identity verification must be recorded before processing or completing a DSR");
+  }
+  if (update.status === "COMPLETED" && !update.outcome?.trim()) {
+    throw new Error("A completion outcome is required before closing a DSR");
+  }
   const [updated] = await transaction.db.update(dataSubjectRequests).set({
     status: update.status,
-    identityVerifiedAt: update.identityVerifiedAt ?? candidate.identityVerifiedAt,
+    identityVerifiedAt,
     outcome: update.outcome ?? candidate.outcome,
     closedAt: update.status === "COMPLETED" ? new Date() : candidate.closedAt,
+    updatedAt: new Date(),
   }).where(eq(dataSubjectRequests.id, candidate.id)).returning();
   if (!updated) throw new Error("DSR transition did not return a row");
   await recordDomainChange(transaction, {
@@ -435,13 +452,39 @@ export async function transitionPrivacyBreach(
     )).limit(1),
     "Privacy breach",
   );
+  const permittedTransitions: Record<string, readonly string[]> = {
+    DETECTED: ["TRIAGE"],
+    TRIAGE: ["INVESTIGATING"],
+    INVESTIGATING: ["CONTAINED"],
+    CONTAINED: ["NOTIFICATION_ASSESSMENT"],
+    NOTIFICATION_ASSESSMENT: ["NOTIFIED", "CLOSED"],
+    NOTIFIED: ["CLOSED"],
+  };
+  if (!permittedTransitions[candidate.status]?.includes(update.status)) {
+    throw new Error(`Breach cannot transition from ${candidate.status} to ${update.status}`);
+  }
+  const containmentSummary = update.containmentSummary ?? candidate.containmentSummary;
+  if (["CONTAINED", "NOTIFICATION_ASSESSMENT", "NOTIFIED", "CLOSED"].includes(update.status) && !containmentSummary?.trim()) {
+    throw new Error("A containment summary is required before continuing the breach workflow");
+  }
+  const notificationRequired = update.notificationRequired ?? candidate.notificationRequired;
+  if (update.status === "NOTIFICATION_ASSESSMENT" && typeof notificationRequired !== "boolean") {
+    throw new Error("Record whether notification is required before completing the notification assessment");
+  }
+  if (update.status === "NOTIFIED" && notificationRequired !== true) {
+    throw new Error("A breach can be marked NOTIFIED only when notification is required");
+  }
+  if (update.status === "CLOSED" && candidate.status === "NOTIFICATION_ASSESSMENT" && notificationRequired !== false) {
+    throw new Error("Notification assessment must determine that notification is not required before direct closure");
+  }
   const [updated] = await transaction.db.update(privacyBreaches).set({
     status: update.status,
-    containmentSummary: update.containmentSummary ?? candidate.containmentSummary,
-    notificationRequired: update.notificationRequired ?? candidate.notificationRequired,
+    containmentSummary,
+    notificationRequired,
     notificationRationale: update.notificationRationale ?? candidate.notificationRationale,
     authorityNotifiedAt: update.authorityNotifiedAt ?? candidate.authorityNotifiedAt,
     subjectsNotifiedAt: update.subjectsNotifiedAt ?? candidate.subjectsNotifiedAt,
+    updatedAt: new Date(),
   }).where(eq(privacyBreaches.id, candidate.id)).returning();
   if (!updated) throw new Error("Breach transition did not return a row");
   await recordDomainChange(transaction, {
