@@ -471,8 +471,14 @@ export async function transitionPrivacyBreach(
   if (update.status === "NOTIFICATION_ASSESSMENT" && typeof notificationRequired !== "boolean") {
     throw new Error("Record whether notification is required before completing the notification assessment");
   }
+  if (update.status === "NOTIFICATION_ASSESSMENT" && !update.notificationRationale?.trim()) {
+    throw new Error("A notification assessment rationale is required");
+  }
   if (update.status === "NOTIFIED" && notificationRequired !== true) {
     throw new Error("A breach can be marked NOTIFIED only when notification is required");
+  }
+  if (update.status === "NOTIFIED" && !update.authorityNotifiedAt && !update.subjectsNotifiedAt && !candidate.authorityNotifiedAt && !candidate.subjectsNotifiedAt) {
+    throw new Error("Record at least one notification date before marking a breach as NOTIFIED");
   }
   if (update.status === "CLOSED" && candidate.status === "NOTIFICATION_ASSESSMENT" && notificationRequired !== false) {
     throw new Error("Notification assessment must determine that notification is not required before direct closure");

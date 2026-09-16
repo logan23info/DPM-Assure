@@ -19,6 +19,7 @@ type Item = {
   retiredAt?: string | null;
   alertType?: string;
   severity?: string;
+  notificationRequired?: boolean | null;
   dataCategory?: string;
   purpose?: string;
   serviceDescription?: string;
@@ -130,11 +131,46 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
   async function transition(action: string, idKey: string, id: string, status?: string) {
     setMessage("Recording governed lifecycle change…");
     try {
-      await send({ action, [idKey]: id, ...(status ? { status } : {}), ...(action === "transition_dsr" && ["IN_PROGRESS", "COMPLETED"].includes(status ?? "") ? { identityVerifiedAt: new Date().toISOString() } : {}), ...(action === "transition_dsr" && status === "COMPLETED" ? { outcome: "Completed during governed verification" } : {}), ...(action === "transition_breach" && ["CONTAINED", "NOTIFICATION_ASSESSMENT", "CLOSED"].includes(status ?? "") ? { containmentSummary: "Synthetic containment completed and impact assessed", notificationRequired: false } : {}) });
+      await send({ action, [idKey]: id, ...(status ? { status } : {}), ...(action === "transition_dsr" && ["IN_PROGRESS", "COMPLETED"].includes(status ?? "") ? { identityVerifiedAt: new Date().toISOString() } : {}), ...(action === "transition_dsr" && status === "COMPLETED" ? { outcome: "Completed during governed verification" } : {}) });
       await load();
       setMessage("Lifecycle change recorded.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not record lifecycle change");
+    }
+  }
+
+  async function transitionBreach(item: Item) {
+    const current = item.status;
+    const status = current === "DETECTED" ? "TRIAGE" : current === "TRIAGE" ? "INVESTIGATING" : current === "INVESTIGATING" ? "CONTAINED" : current === "CONTAINED" ? "NOTIFICATION_ASSESSMENT" : current === "NOTIFICATION_ASSESSMENT" && item.notificationRequired ? "NOTIFIED" : "CLOSED";
+    const body: Record<string, unknown> = { action: "transition_breach", breachId: item.id, status };
+    if (status === "CONTAINED") {
+      const containmentSummary = window.prompt("Containment summary");
+      if (!containmentSummary?.trim()) return;
+      body.containmentSummary = containmentSummary;
+    }
+    if (status === "NOTIFICATION_ASSESSMENT") {
+      body.notificationRequired = window.confirm("Is notification to an authority or affected people required?");
+      const notificationRationale = window.prompt("Notification assessment rationale");
+      if (!notificationRationale?.trim()) return;
+      body.notificationRationale = notificationRationale;
+    }
+    if (status === "NOTIFIED") {
+      const authorityNotifiedAt = window.prompt("Authority notification date/time (optional, YYYY-MM-DD)");
+      const subjectsNotifiedAt = window.prompt("Affected people notification date/time (optional, YYYY-MM-DD)");
+      if (!authorityNotifiedAt?.trim() && !subjectsNotifiedAt?.trim()) {
+        setMessage("Record at least one notification date before marking the breach as notified.");
+        return;
+      }
+      if (authorityNotifiedAt?.trim()) body.authorityNotifiedAt = new Date(`${authorityNotifiedAt.trim()}T00:00:00.000Z`).toISOString();
+      if (subjectsNotifiedAt?.trim()) body.subjectsNotifiedAt = new Date(`${subjectsNotifiedAt.trim()}T00:00:00.000Z`).toISOString();
+    }
+    setMessage("Recording governed breach change…");
+    try {
+      await send(body);
+      await load();
+      setMessage("Breach lifecycle change recorded.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not record breach lifecycle change");
     }
   }
 
@@ -299,7 +335,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
       actions={(item) => item.requestType && item.status !== "COMPLETED"
         ? <button type="button" className="secondary-button" onClick={() => transition("transition_dsr", "dsrId", item.id, item.status === "RECEIVED" ? "IDENTITY_VERIFICATION" : item.status === "IDENTITY_VERIFICATION" ? "IN_PROGRESS" : "COMPLETED")}>{item.status === "RECEIVED" ? "Verify identity" : item.status === "IDENTITY_VERIFICATION" ? "Start processing" : "Complete"}</button>
         : item.title && item.status !== "CLOSED"
-          ? <button type="button" className="secondary-button" onClick={() => transition("transition_breach", "breachId", item.id, item.status === "DETECTED" ? "TRIAGE" : item.status === "TRIAGE" ? "INVESTIGATING" : item.status === "INVESTIGATING" ? "CONTAINED" : item.status === "CONTAINED" ? "NOTIFICATION_ASSESSMENT" : "CLOSED")}>{item.status === "DETECTED" ? "Triage breach" : item.status === "TRIAGE" ? "Start investigation" : item.status === "INVESTIGATING" ? "Contain breach" : item.status === "CONTAINED" ? "Assess notification" : "Close breach"}</button>
+          ? <button type="button" className="secondary-button" onClick={() => transitionBreach(item)}>{item.status === "DETECTED" ? "Triage breach" : item.status === "TRIAGE" ? "Start investigation" : item.status === "INVESTIGATING" ? "Contain breach" : item.status === "CONTAINED" ? "Assess notification" : item.status === "NOTIFICATION_ASSESSMENT" && item.notificationRequired ? "Record notifications" : "Close breach"}</button>
           : null}
       render={<>
         <form className="privacy-form" onSubmit={(event) => submit(event, "create_dsr")}>
