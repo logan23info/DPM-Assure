@@ -48,7 +48,13 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
   const load = useCallback(async () => {
     const response = await fetch(`/api/organizations/${organizationId}/privacy`, { cache: "no-store" });
     if (!response.ok) throw new Error("Privacy operations could not be loaded");
-    setData(await response.json());
+    const raw = await response.text();
+    if (!raw.trim()) throw new Error("Privacy operations returned an empty response");
+    try {
+      setData(JSON.parse(raw) as Data);
+    } catch {
+      throw new Error("Privacy operations returned an invalid response");
+    }
   }, [organizationId]);
 
   useEffect(() => {
