@@ -22,6 +22,29 @@ function uuid(value: unknown, name: string): string {
   return value;
 }
 
+function reason(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) throw new PbcCompletionError("reason is required");
+  const trimmed = value.trim();
+  if (trimmed.length > 10_000) throw new PbcCompletionError("reason must not exceed 10000 characters");
+  return trimmed;
+}
+
+async function getTestingRequest(transaction: AuthorizedTenantTransaction, pbcRequestId: string) {
+  const request = (
+    await transaction.db.execute<{ engagement_id: string; status: string }>(sql`
+      select p.engagement_id, p.status::text
+      from pbc_requests p
+      join engagements e on e.id = p.engagement_id
+      where p.id = ${pbcRequestId}::uuid
+        and e.organization_id = ${transaction.context.organizationId}::uuid
+        and e.status = 'TESTING'
+      for update of p
+    `)
+  ).rows[0];
+  if (!request) throw new PbcCompletionError("PBC request was not found in a TESTING engagement");
+  return request;
+}
+
 export async function completePbcRequest(
   transaction: AuthorizedTenantTransaction,
   input: Record<string, unknown>,
@@ -112,4 +135,26 @@ export async function completePbcRequest(
     fulfilledBy: evidence.uploaded_by,
     fulfilledAt: completedAt.toISOString(),
   };
+}
+
+export async function closePbcRequest(transaction: AuthorizedTenantTransaction, input: Record<string, unknown>) {
+  requirePermission(transaction.membership.role, permissions.workpaperReview);
+  const pbcRequestId = uuid(input.pbcRequestId, "pbcRequestId");
+  const closureReason = reason(input.reason);
+  const request = await getTestingRequest(transaction, pbcRequestId);
+  if (request.status !== "COMPLETED") throw new PbcCompletionError("Only a completed PBC request can be closed");
+  await transaction.db.execute(sql`update pbc_requests set status = 'CLOSED', updated_at = now() where id = ${pbcRequestId}::uuid`);
+  await recordDomainChange(transaction, { eventType: "engagement.pbc.closed", aggregateType: "engagement", aggregateId: request.engagement_id, action: "engagement.pbc.close", entityType: "pbc_request", entityId: pbcRequestId, payload: { pbcRequestId, reason: closureReason }, oldValues: { status: request.status }, newValues: { status: "CLOSED" } });
+  return { id: pbcRequestId, status: "CLOSED" as const };
+}
+
+export async function cancelPbcRequest(transaction: AuthorizedTenantTransaction, input: Record<string, unknown>) {
+  requirePermission(transaction.membership.role, permissions.evidenceUpload);
+  const pbcRequestId = uuid(input.pbcRequestId, "pbcRequestId");
+  const cancellationReason = reason(input.reason);
+  const request = await getTestingRequest(transaction, pbcRequestId);
+  if (!["OPEN", "IN_PROGRESS", "BLOCKED"].includes(request.status)) throw new PbcCompletionError(`PBC request cannot be cancelled from status ${request.status}`);
+  await transaction.db.execute(sql`update pbc_requests set status = 'CANCELLED', assigned_to = null, updated_at = now() where id = ${pbcRequestId}::uuid`);
+  await recordDomainChange(transaction, { eventType: "engagement.pbc.cancelled", aggregateType: "engagement", aggregateId: request.engagement_id, action: "engagement.pbc.cancel", entityType: "pbc_request", entityId: pbcRequestId, payload: { pbcRequestId, reason: cancellationReason }, oldValues: { status: request.status }, newValues: { status: "CANCELLED" } });
+  return { id: pbcRequestId, status: "CANCELLED" as const };
 }
