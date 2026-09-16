@@ -137,6 +137,28 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     }
   }
 
+  async function approveWithReview(action: "activate_activity" | "activate_processor" | "approve_transfer", idKey: string, id: string) {
+    const reviewDate = window.prompt("Next review date (optional, YYYY-MM-DD)");
+    if (reviewDate === null) return;
+    let nextReviewAt: string | undefined;
+    if (reviewDate.trim()) {
+      const parsed = new Date(`${reviewDate.trim()}T00:00:00.000Z`);
+      if (Number.isNaN(parsed.getTime())) {
+        setMessage("Enter the review date as YYYY-MM-DD, or leave it blank.");
+        return;
+      }
+      nextReviewAt = parsed.toISOString();
+    }
+    setMessage("Recording governed approval…");
+    try {
+      await send({ action, [idKey]: id, ...(nextReviewAt ? { nextReviewAt } : {}) });
+      await load();
+      setMessage(nextReviewAt ? "Approval recorded with the scheduled review date." : "Approval recorded.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not record approval");
+    }
+  }
+
   async function decideCandidate(candidateId: string, action: "accept_assurance_candidate" | "reject_assurance_candidate") {
     const rationale = window.prompt(action === "accept_assurance_candidate" ? "Why should this candidate be accepted?" : "Why should this candidate be rejected?");
     if (!rationale?.trim()) return;
@@ -202,7 +224,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     <Panel
       title="ROPA / processing activities"
       items={activities}
-      actions={(item) => item.state !== "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => transition("activate_activity", "activityId", item.id)}>Activate</button> : null}
+      actions={(item) => item.state !== "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => approveWithReview("activate_activity", "activityId", item.id)}>Activate</button> : null}
       render={<form className="privacy-form" onSubmit={(event) => submit(event, "create_activity")}>
         <input name="name" required placeholder="Processing activity name" />
         <input name="purpose" required placeholder="Purpose" />
@@ -239,11 +261,11 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
       title="Processors and transfer assessments"
       items={[...(data?.processors ?? []), ...(data?.transfers ?? [])]}
       actions={(item) => item.name
-        ? <>{item.status !== "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => editProcessor(item)}>Edit due diligence</button> : null}{item.status === "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => transition("suspend_processor", "processorId", item.id)}>Suspend processor</button> : <button type="button" className="secondary-button" onClick={() => transition("activate_processor", "processorId", item.id)}>Approve processor</button>}</>
+        ? <>{item.status !== "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => editProcessor(item)}>Edit due diligence</button> : null}{item.status === "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => transition("suspend_processor", "processorId", item.id)}>Suspend processor</button> : <button type="button" className="secondary-button" onClick={() => approveWithReview("activate_processor", "processorId", item.id)}>Approve processor</button>}</>
         : item.destinationCountry && item.state === "DRAFT"
           ? <button type="button" className="secondary-button" onClick={() => transition("submit_transfer", "transferId", item.id)}>Send for review</button>
           : item.destinationCountry && item.state === "UNDER_REVIEW"
-            ? <button type="button" className="secondary-button" onClick={() => transition("approve_transfer", "transferId", item.id)}>Approve transfer</button>
+            ? <button type="button" className="secondary-button" onClick={() => approveWithReview("approve_transfer", "transferId", item.id)}>Approve transfer</button>
             : null}
       render={<>
         <form className="privacy-form" onSubmit={(event) => submit(event, "create_processor")}>
