@@ -408,14 +408,14 @@ export async function transitionDsr(
   if (["IN_PROGRESS", "COMPLETED"].includes(update.status) && !identityVerifiedAt) {
     throw new Error("Identity verification must be recorded before processing or completing a DSR");
   }
-  if (update.status === "COMPLETED" && !update.outcome?.trim()) {
-    throw new Error("A completion outcome is required before closing a DSR");
+  if (["COMPLETED", "REJECTED", "CANCELLED"].includes(update.status) && !update.outcome?.trim()) {
+    throw new Error("A documented outcome is required before closing a DSR");
   }
   const [updated] = await transaction.db.update(dataSubjectRequests).set({
     status: update.status,
     identityVerifiedAt,
     outcome: update.outcome ?? candidate.outcome,
-    closedAt: update.status === "COMPLETED" ? new Date() : candidate.closedAt,
+    closedAt: ["COMPLETED", "REJECTED", "CANCELLED"].includes(update.status) ? new Date() : candidate.closedAt,
     updatedAt: new Date(),
   }).where(eq(dataSubjectRequests.id, candidate.id)).returning();
   if (!updated) throw new Error("DSR transition did not return a row");

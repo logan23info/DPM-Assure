@@ -79,6 +79,44 @@ export async function createProcessingActivity(
   return created;
 }
 
+export async function updateDraftProcessingActivity(
+  transaction: AuthorizedTenantTransaction,
+  activityId: string,
+  input: CreateProcessingActivityInput,
+) {
+  requirePermission(transaction.membership.role, permissions.privacyManage);
+  const validated = validateProcessingActivity(input);
+  const [candidate] = await transaction.db.select().from(processingActivities).where(and(
+    eq(processingActivities.id, activityId), eq(processingActivities.organizationId, transaction.context.organizationId),
+  )).limit(1);
+  if (!candidate) throw new Error("Processing activity was not found in the authorized organization");
+  if (candidate.state !== "DRAFT") throw new Error("Only a DRAFT processing activity can be edited");
+  const [updated] = await transaction.db.update(processingActivities).set({
+    clientId: validated.clientId,
+    name: validated.name,
+    purpose: validated.purpose,
+    controllerProcessorRole: validated.controllerProcessorRole,
+    dataSubjectCategories: validated.dataSubjectCategories,
+    personalDataCategories: validated.personalDataCategories,
+    specialCategoryData: validated.specialCategoryData,
+    lawfulBasis: validated.lawfulBasis,
+    recipients: validated.recipients,
+    retentionSummary: validated.retentionSummary,
+    securityMeasuresSummary: validated.securityMeasuresSummary,
+    ownerUserId: validated.ownerUserId,
+    updatedAt: new Date(),
+  }).where(eq(processingActivities.id, candidate.id)).returning();
+  if (!updated) throw new Error("Processing activity update did not return a row");
+  await recordDomainChange(transaction, {
+    eventType: "privacy.processing_activity.updated", aggregateType: "processing_activity", aggregateId: updated.id,
+    action: "privacy.processing_activity.update", entityType: "processing_activity",
+    oldValues: { name: candidate.name, purpose: candidate.purpose, lawfulBasis: candidate.lawfulBasis },
+    newValues: { name: updated.name, purpose: updated.purpose, lawfulBasis: updated.lawfulBasis },
+    payload: { processingActivityId: updated.id, state: updated.state },
+  });
+  return updated;
+}
+
 export async function createDpiaAssessment(
   transaction: AuthorizedTenantTransaction,
   input: CreateDpiaInput,
@@ -261,6 +299,49 @@ export async function createInternationalTransfer(
     payload: { transferId: created.id, mechanism: created.mechanism, destinationCountry: created.destinationCountry },
   });
   return created;
+}
+
+export async function updateDraftInternationalTransfer(
+  transaction: AuthorizedTenantTransaction,
+  transferId: string,
+  input: CreateTransferInput,
+) {
+  requirePermission(transaction.membership.role, permissions.privacyManage);
+  const validated = validateTransfer(input);
+  const [candidate] = await transaction.db.select().from(internationalTransfers).where(and(
+    eq(internationalTransfers.id, transferId), eq(internationalTransfers.organizationId, transaction.context.organizationId),
+  )).limit(1);
+  if (!candidate) throw new Error("International transfer was not found in the authorized organization");
+  if (candidate.state !== "DRAFT") throw new Error("Only a DRAFT international transfer can be edited");
+  const [activity] = await transaction.db.select({ id: processingActivities.id }).from(processingActivities).where(and(
+    eq(processingActivities.id, validated.processingActivityId), eq(processingActivities.organizationId, transaction.context.organizationId),
+  )).limit(1);
+  if (!activity) throw new Error("Processing activity was not found in the authorized organization");
+  if (validated.processorId) {
+    const [processor] = await transaction.db.select({ id: processors.id }).from(processors).where(and(
+      eq(processors.id, validated.processorId), eq(processors.organizationId, transaction.context.organizationId),
+    )).limit(1);
+    if (!processor) throw new Error("Processor was not found in the authorized organization");
+  }
+  const [updated] = await transaction.db.update(internationalTransfers).set({
+    processingActivityId: validated.processingActivityId,
+    processorId: validated.processorId,
+    destinationCountry: validated.destinationCountry,
+    mechanism: validated.mechanism,
+    mechanismReference: validated.mechanismReference,
+    transferRiskAssessmentReference: validated.transferRiskAssessmentReference,
+    supplementaryMeasures: validated.supplementaryMeasures,
+    updatedAt: new Date(),
+  }).where(eq(internationalTransfers.id, candidate.id)).returning();
+  if (!updated) throw new Error("International transfer update did not return a row");
+  await recordDomainChange(transaction, {
+    eventType: "privacy.transfer.updated", aggregateType: "international_transfer", aggregateId: updated.id,
+    action: "privacy.transfer.update", entityType: "international_transfer",
+    oldValues: { destinationCountry: candidate.destinationCountry, mechanism: candidate.mechanism },
+    newValues: { destinationCountry: updated.destinationCountry, mechanism: updated.mechanism },
+    payload: { transferId: updated.id, state: updated.state },
+  });
+  return updated;
 }
 
 export async function createDataSubjectRequest(

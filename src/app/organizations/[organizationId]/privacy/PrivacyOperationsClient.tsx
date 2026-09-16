@@ -27,6 +27,20 @@ type Item = {
   contractReference?: string | null;
   dpaReference?: string | null;
   securityReviewStatus?: string | null;
+  clientId?: string | null;
+  controllerProcessorRole?: string;
+  lawfulBasis?: string | null;
+  retentionSummary?: string | null;
+  securityMeasuresSummary?: string | null;
+  dataSubjectCategories?: string[];
+  personalDataCategories?: string[];
+  recipients?: string[];
+  processingActivityId?: string;
+  processorId?: string | null;
+  mechanism?: string;
+  mechanismReference?: string | null;
+  transferRiskAssessmentReference?: string | null;
+  supplementaryMeasures?: string | null;
 };
 
 type Data = {
@@ -129,6 +143,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
   }
 
   async function transition(action: string, idKey: string, id: string, status?: string) {
+    if (["close_activity", "close_transfer", "retire_notice", "retire_retention_rule", "withdraw_consent", "suspend_processor"].includes(action) && !window.confirm("This records a governed lifecycle change and may affect future operations. Continue?")) return;
     setMessage("Recording governed lifecycle change…");
     try {
       await send({ action, [idKey]: id, ...(status ? { status } : {}), ...(action === "transition_dsr" && ["IN_PROGRESS", "COMPLETED"].includes(status ?? "") ? { identityVerifiedAt: new Date().toISOString() } : {}), ...(action === "transition_dsr" && status === "COMPLETED" ? { outcome: "Completed during governed verification" } : {}) });
@@ -171,6 +186,20 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
       setMessage("Breach lifecycle change recorded.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not record breach lifecycle change");
+    }
+  }
+
+  async function transitionDsrCase(item: Item, status: "IDENTITY_VERIFICATION" | "IN_PROGRESS" | "ON_HOLD" | "COMPLETED" | "REJECTED" | "CANCELLED") {
+    const terminal = ["COMPLETED", "REJECTED", "CANCELLED"].includes(status);
+    const outcome = terminal ? window.prompt("Document the DSR outcome") : undefined;
+    if (terminal && !outcome?.trim()) return;
+    setMessage("Recording governed DSR change…");
+    try {
+      await send({ action: "transition_dsr", dsrId: item.id, status, ...(status === "IN_PROGRESS" ? { identityVerifiedAt: new Date().toISOString() } : {}), ...(outcome ? { outcome } : {}) });
+      await load();
+      setMessage("DSR lifecycle change recorded.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not record DSR lifecycle change");
     }
   }
 
@@ -233,6 +262,51 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     }
   }
 
+  async function editActivity(item: Item) {
+    const name = window.prompt("Processing activity name", item.name ?? "");
+    if (!name?.trim()) return;
+    const purpose = window.prompt("Purpose", item.purpose ?? "");
+    if (!purpose?.trim()) return;
+    const controllerProcessorRole = window.prompt("Role: CONTROLLER, PROCESSOR, or JOINT_CONTROLLER", item.controllerProcessorRole ?? "CONTROLLER");
+    if (!controllerProcessorRole?.trim()) return;
+    const lawfulBasis = window.prompt("Lawful basis (optional)", item.lawfulBasis ?? "");
+    const dataSubjectCategories = window.prompt("Data subjects, comma separated", item.dataSubjectCategories?.join(", ") ?? "");
+    const personalDataCategories = window.prompt("Personal data, comma separated", item.personalDataCategories?.join(", ") ?? "");
+    const recipients = window.prompt("Recipients, comma separated", item.recipients?.join(", ") ?? "");
+    const retentionSummary = window.prompt("Retention summary (optional)", item.retentionSummary ?? "");
+    const securityMeasuresSummary = window.prompt("Security measures summary (optional)", item.securityMeasuresSummary ?? "");
+    setMessage("Updating draft processing activity…");
+    try {
+      await send({ action: "update_activity", activityId: item.id, name, purpose, controllerProcessorRole, lawfulBasis: lawfulBasis ?? "", dataSubjectCategories: dataSubjectCategories?.split(",").map((value) => value.trim()).filter(Boolean) ?? [], personalDataCategories: personalDataCategories?.split(",").map((value) => value.trim()).filter(Boolean) ?? [], recipients: recipients?.split(",").map((value) => value.trim()).filter(Boolean) ?? [], retentionSummary: retentionSummary ?? "", securityMeasuresSummary: securityMeasuresSummary ?? "", ...(item.clientId ? { clientId: item.clientId } : {}) });
+      await load();
+      setMessage("Draft processing activity updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update processing activity");
+    }
+  }
+
+  async function editTransfer(item: Item) {
+    const destinationCountry = window.prompt("Destination country", item.destinationCountry ?? "");
+    if (!destinationCountry?.trim()) return;
+    const mechanism = window.prompt("Transfer mechanism: SCC, ADEQUACY, BCR, DEROGATION, or OTHER", item.mechanism ?? "SCC");
+    if (!mechanism?.trim()) return;
+    const mechanismReference = window.prompt("Mechanism reference (optional)", item.mechanismReference ?? "");
+    const transferRiskAssessmentReference = window.prompt("Transfer risk assessment reference (optional)", item.transferRiskAssessmentReference ?? "");
+    const supplementaryMeasures = window.prompt("Supplementary measures (optional)", item.supplementaryMeasures ?? "");
+    if (!item.processingActivityId) {
+      setMessage("This transfer does not have a valid processing-activity linkage.");
+      return;
+    }
+    setMessage("Updating draft transfer assessment…");
+    try {
+      await send({ action: "update_transfer", transferId: item.id, processingActivityId: item.processingActivityId, destinationCountry, mechanism, mechanismReference: mechanismReference ?? "", transferRiskAssessmentReference: transferRiskAssessmentReference ?? "", supplementaryMeasures: supplementaryMeasures ?? "", ...(item.processorId ? { processorId: item.processorId } : {}) });
+      await load();
+      setMessage("Draft transfer assessment updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update transfer assessment");
+    }
+  }
+
   const activities = data?.activities ?? [];
   const privacyRecords = [
     ...activities.map((item) => ({ ...item, privacyRecordType: "PROCESSING_ACTIVITY" })),
@@ -261,7 +335,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     <Panel
       title="ROPA / processing activities"
       items={activities}
-      actions={(item) => item.state === "DRAFT" ? <button type="button" className="secondary-button" onClick={() => approveWithReview("activate_activity", "activityId", item.id)}>Activate</button>
+      actions={(item) => item.state === "DRAFT" ? <><button type="button" className="secondary-button" onClick={() => editActivity(item)}>Edit draft</button><button type="button" className="secondary-button" onClick={() => approveWithReview("activate_activity", "activityId", item.id)}>Activate</button></>
         : item.state === "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => transition("close_activity", "activityId", item.id)}>Close activity</button> : null}
       render={<form className="privacy-form" onSubmit={(event) => submit(event, "create_activity")}>
         <input name="name" required placeholder="Processing activity name" />
@@ -301,7 +375,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
       actions={(item) => item.name
         ? <>{item.status !== "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => editProcessor(item)}>Edit due diligence</button> : null}{item.status === "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => transition("suspend_processor", "processorId", item.id)}>Suspend processor</button> : <button type="button" className="secondary-button" onClick={() => approveWithReview("activate_processor", "processorId", item.id)}>Approve processor</button>}</>
         : item.destinationCountry && item.state === "DRAFT"
-          ? <button type="button" className="secondary-button" onClick={() => transition("submit_transfer", "transferId", item.id)}>Send for review</button>
+          ? <><button type="button" className="secondary-button" onClick={() => editTransfer(item)}>Edit draft</button><button type="button" className="secondary-button" onClick={() => transition("submit_transfer", "transferId", item.id)}>Send for review</button></>
           : item.destinationCountry && item.state === "UNDER_REVIEW"
             ? <button type="button" className="secondary-button" onClick={() => approveWithReview("approve_transfer", "transferId", item.id)}>Approve transfer</button>
             : item.destinationCountry && item.state === "ACTIVE"
@@ -332,8 +406,11 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     <Panel
       title="DSRs and breach register"
       items={[...(data?.dsrs ?? []), ...(data?.breaches ?? [])]}
-      actions={(item) => item.requestType && item.status !== "COMPLETED"
-        ? <button type="button" className="secondary-button" onClick={() => transition("transition_dsr", "dsrId", item.id, item.status === "RECEIVED" ? "IDENTITY_VERIFICATION" : item.status === "IDENTITY_VERIFICATION" ? "IN_PROGRESS" : "COMPLETED")}>{item.status === "RECEIVED" ? "Verify identity" : item.status === "IDENTITY_VERIFICATION" ? "Start processing" : "Complete"}</button>
+      actions={(item) => item.requestType && !["COMPLETED", "REJECTED", "CANCELLED"].includes(item.status ?? "")
+        ? item.status === "RECEIVED" ? <button type="button" className="secondary-button" onClick={() => transitionDsrCase(item, "IDENTITY_VERIFICATION")}>Verify identity</button>
+          : item.status === "IDENTITY_VERIFICATION" ? <><button type="button" className="secondary-button" onClick={() => transitionDsrCase(item, "IN_PROGRESS")}>Start processing</button><button type="button" className="secondary-button" onClick={() => transitionDsrCase(item, "ON_HOLD")}>Place on hold</button><button type="button" className="secondary-button" onClick={() => transitionDsrCase(item, "REJECTED")}>Reject</button></>
+            : item.status === "ON_HOLD" ? <><button type="button" className="secondary-button" onClick={() => transitionDsrCase(item, "IN_PROGRESS")}>Resume processing</button><button type="button" className="secondary-button" onClick={() => transitionDsrCase(item, "CANCELLED")}>Cancel</button></>
+              : <><button type="button" className="secondary-button" onClick={() => transitionDsrCase(item, "COMPLETED")}>Complete</button><button type="button" className="secondary-button" onClick={() => transitionDsrCase(item, "ON_HOLD")}>Place on hold</button><button type="button" className="secondary-button" onClick={() => transitionDsrCase(item, "REJECTED")}>Reject</button></>
         : item.title && item.status !== "CLOSED"
           ? <button type="button" className="secondary-button" onClick={() => transitionBreach(item)}>{item.status === "DETECTED" ? "Triage breach" : item.status === "TRIAGE" ? "Start investigation" : item.status === "INVESTIGATING" ? "Contain breach" : item.status === "CONTAINED" ? "Assess notification" : item.status === "NOTIFICATION_ASSESSMENT" && item.notificationRequired ? "Record notifications" : "Close breach"}</button>
           : null}

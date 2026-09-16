@@ -30,6 +30,8 @@ import {
   createProcessingActivity,
   recordPrivacyBreach,
   registerProcessor,
+  updateDraftInternationalTransfer,
+  updateDraftProcessingActivity,
 } from "@/domain/privacy/service";
 import {
   activateProcessingActivity,
@@ -200,6 +202,25 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
                 };
                 return json(await createProcessingActivity(tx, input), 201);
               }
+              case "update_activity": {
+                const clientId = optionalText(body, "clientId");
+                const lawfulBasis = optionalText(body, "lawfulBasis");
+                const retentionSummary = optionalText(body, "retentionSummary");
+                const securityMeasuresSummary = optionalText(body, "securityMeasuresSummary");
+                const input: CreateProcessingActivityInput = {
+                  name: requiredText(body, "name"),
+                  purpose: requiredText(body, "purpose"),
+                  controllerProcessorRole: requiredText(body, "controllerProcessorRole") as CreateProcessingActivityInput["controllerProcessorRole"],
+                  dataSubjectCategories: strings(body.dataSubjectCategories),
+                  personalDataCategories: strings(body.personalDataCategories),
+                  recipients: strings(body.recipients),
+                  ...(clientId ? { clientId } : {}),
+                  ...(lawfulBasis ? { lawfulBasis } : {}),
+                  ...(retentionSummary ? { retentionSummary } : {}),
+                  ...(securityMeasuresSummary ? { securityMeasuresSummary } : {}),
+                };
+                return json(await updateDraftProcessingActivity(tx, requiredText(body, "activityId"), input));
+              }
               case "create_dpia": {
                 const riskSummary = optionalText(body, "riskSummary");
                 const mitigationSummary = optionalText(body, "mitigationSummary");
@@ -244,6 +265,22 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
                   ...(supplementaryMeasures ? { supplementaryMeasures } : {}),
                 };
                 return json(await createInternationalTransfer(tx, input), 201);
+              }
+              case "update_transfer": {
+                const processorId = optionalText(body, "processorId");
+                const mechanismReference = optionalText(body, "mechanismReference");
+                const transferRiskAssessmentReference = optionalText(body, "transferRiskAssessmentReference");
+                const supplementaryMeasures = optionalText(body, "supplementaryMeasures");
+                const input: CreateTransferInput = {
+                  processingActivityId: requiredText(body, "processingActivityId"),
+                  destinationCountry: requiredText(body, "destinationCountry"),
+                  mechanism: requiredText(body, "mechanism") as CreateTransferInput["mechanism"],
+                  ...(processorId ? { processorId } : {}),
+                  ...(mechanismReference ? { mechanismReference } : {}),
+                  ...(transferRiskAssessmentReference ? { transferRiskAssessmentReference } : {}),
+                  ...(supplementaryMeasures ? { supplementaryMeasures } : {}),
+                };
+                return json(await updateDraftInternationalTransfer(tx, requiredText(body, "transferId"), input));
               }
               case "create_dsr": {
                 const dueAt = optionalText(body, "dueAt");
