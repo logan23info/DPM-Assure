@@ -223,9 +223,9 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
       title="DSRs and breach register"
       items={[...(data?.dsrs ?? []), ...(data?.breaches ?? [])]}
       actions={(item) => item.requestType && item.status !== "COMPLETED"
-        ? <button type="button" className="secondary-button" onClick={() => transition("transition_dsr", "dsrId", item.id, item.status === "RECEIVED" ? "IDENTITY_VERIFICATION" : "COMPLETED")}>{item.status === "RECEIVED" ? "Verify identity" : "Complete"}</button>
+        ? <button type="button" className="secondary-button" onClick={() => transition("transition_dsr", "dsrId", item.id, item.status === "RECEIVED" ? "IDENTITY_VERIFICATION" : item.status === "IDENTITY_VERIFICATION" ? "IN_PROGRESS" : "COMPLETED")}>{item.status === "RECEIVED" ? "Verify identity" : item.status === "IDENTITY_VERIFICATION" ? "Start processing" : "Complete"}</button>
         : item.title && item.status !== "CLOSED"
-          ? <button type="button" className="secondary-button" onClick={() => transition("transition_breach", "breachId", item.id, item.status === "TRIAGE" ? "INVESTIGATING" : "CLOSED")}>{item.status === "TRIAGE" ? "Start investigation" : "Close breach"}</button>
+          ? <button type="button" className="secondary-button" onClick={() => transition("transition_breach", "breachId", item.id, item.status === "DETECTED" ? "TRIAGE" : item.status === "TRIAGE" ? "INVESTIGATING" : "CLOSED")}>{item.status === "DETECTED" ? "Triage breach" : item.status === "TRIAGE" ? "Start investigation" : "Close breach"}</button>
           : null}
       render={<>
         <form className="privacy-form" onSubmit={(event) => submit(event, "create_dsr")}>
