@@ -84,7 +84,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     setMessage("Saving governed record…");
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const body: Record<string, unknown> = { ...Object.fromEntries(form.entries()), action };
+    const body: Record<string, unknown> = { ...Object.fromEntries(form.entries()), action };\n    if (action === "create_processor" && body.securityReviewStatus !== "APPROVED") {\n      setMessage("Security review status must be APPROVED before a processor can be activated.");\n      return;\n    }
     ["dataSubjectCategories", "personalDataCategories", "recipients", "dataCategories"].forEach((key) => {
       if (key in body) body[key] = list(form.get(key));
     });
@@ -202,9 +202,9 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
           <input name="name" required placeholder="Processor name" />
           <input name="serviceDescription" required placeholder="Service description" />
           <input name="country" placeholder="Country" />
-          <input name="contractReference" placeholder="Contract reference" />
-          <input name="dpaReference" placeholder="DPA reference" />
-          <input name="securityReviewStatus" placeholder="Security review status" />
+          <input name="contractReference" required placeholder="Contract reference" />
+          <input name="dpaReference" required placeholder="DPA reference" />
+          <input name="securityReviewStatus" required placeholder="Security review status (APPROVED)" />
           <button className="primary-button">Register processor</button>
         </form>
         <form className="privacy-form" onSubmit={(event) => submit(event, "create_transfer")}>
