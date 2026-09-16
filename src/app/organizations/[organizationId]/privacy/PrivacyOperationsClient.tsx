@@ -14,12 +14,17 @@ type Item = {
   privacyRecordType?: string;
   candidateType?: string;
   suggestedTitle?: string;
+  noticeKey?: string;
+  approvedAt?: string | null;
 };
 
 type Data = {
   clients: { id: string; name: string }[];
   engagements: { id: string; name: string; status: string }[];
   assuranceCandidates: Item[];
+  retentionRules: Item[];
+  notices: Item[];
+  consents: Item[];
   activities: Item[];
   dpias: Item[];
   processors: Item[];
@@ -64,6 +69,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
       if (key in body) body[key] = list(form.get(key));
     });
     if (action === "create_dsr") body.receivedAt = new Date().toISOString();
+    if (action === "record_consent") body.capturedAt = new Date().toISOString();
     if (action === "create_breach") {
       body.detectedAt = new Date().toISOString();
       body.notificationRequired = form.get("notificationRequired") === "on";
@@ -116,6 +122,9 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     ...(data?.dpias ?? []).map((item) => ({ ...item, privacyRecordType: "DPIA" })),
     ...(data?.processors ?? []).map((item) => ({ ...item, privacyRecordType: "PROCESSOR" })),
     ...(data?.transfers ?? []).map((item) => ({ ...item, privacyRecordType: "TRANSFER" })),
+    ...(data?.retentionRules ?? []).map((item) => ({ ...item, privacyRecordType: "RETENTION_RULE" })),
+    ...(data?.notices ?? []).map((item) => ({ ...item, privacyRecordType: "NOTICE" })),
+    ...(data?.consents ?? []).map((item) => ({ ...item, privacyRecordType: "CONSENT" })),
     ...(data?.dsrs ?? []).map((item) => ({ ...item, privacyRecordType: "DSR" })),
     ...(data?.breaches ?? []).map((item) => ({ ...item, privacyRecordType: "BREACH" })),
   ];
@@ -232,6 +241,38 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
         <input name="suggestedEvidence" placeholder="Suggested evidence, required for evidence request" />
         <button className="primary-button">Propose for assurance review</button>
       </form>}
+    />
+    <Panel
+      title="Retention, notices and consent"
+      items={[...(data?.retentionRules ?? []), ...(data?.notices ?? []), ...(data?.consents ?? [])]}
+      actions={(item) => item.noticeKey && !item.approvedAt ? <button type="button" className="secondary-button" onClick={() => transition("approve_notice", "noticeId", item.id)}>Approve notice</button>
+        : item.status === "GIVEN" ? <button type="button" className="secondary-button" onClick={() => transition("withdraw_consent", "consentId", item.id)}>Withdraw consent</button> : null}
+      render={<>
+        <form className="privacy-form" onSubmit={(event) => submit(event, "create_retention_rule")}>
+          <select name="processingActivityId" required defaultValue=""><option value="" disabled>Select processing activity</option>{activities.map((activity) => <option key={activity.id} value={activity.id}>{activity.name}</option>)}</select>
+          <input name="dataCategory" required placeholder="Data category" />
+          <input name="retentionPeriod" required placeholder="Retention period" />
+          <input name="triggerEvent" required placeholder="Retention trigger event" />
+          <input name="disposalMethod" placeholder="Disposal method" />
+          <input name="legalBasisReference" placeholder="Legal basis reference" />
+          <button className="primary-button">Add retention rule</button>
+        </form>
+        <form className="privacy-form" onSubmit={(event) => submit(event, "register_notice")}>
+          <input name="noticeKey" required placeholder="Notice identifier" />
+          <input name="title" required placeholder="Notice title" />
+          <input name="contentHash" required placeholder="Lowercase SHA-256 content hash" />
+          <input name="storageReference" required placeholder="Private evidence storage reference" />
+          <input name="effectiveAt" type="datetime-local" />
+          <button className="primary-button">Register notice version</button>
+        </form>
+        <form className="privacy-form" onSubmit={(event) => submit(event, "record_consent")}>
+          <input name="subjectReferenceHash" required placeholder="Lowercase SHA-256 subject reference" />
+          <input name="purpose" required placeholder="Consent purpose" />
+          <select name="processingActivityId"><option value="">No activity linkage</option>{activities.map((activity) => <option key={activity.id} value={activity.id}>{activity.name}</option>)}</select>
+          <select name="noticeId"><option value="">No notice linkage</option>{data?.notices.map((notice) => <option key={notice.id} value={notice.id}>{notice.title ?? notice.noticeKey}</option>)}</select>
+          <button className="primary-button">Record consent</button>
+        </form>
+      </>}
     />
   </div>;
 }

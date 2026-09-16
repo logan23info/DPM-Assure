@@ -139,6 +139,51 @@ export const internationalTransfers = pgTable("international_transfers", {
   updatedAt: timestamptz("updated_at").notNull().defaultNow(),
 });
 
+export const retentionRules = pgTable("retention_rules", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  processingActivityId: uuid("processing_activity_id").notNull().references(() => processingActivities.id),
+  dataCategory: text("data_category").notNull(),
+  retentionPeriod: text("retention_period").notNull(),
+  triggerEvent: text("trigger_event").notNull(),
+  disposalMethod: text("disposal_method"),
+  legalBasisReference: text("legal_basis_reference"),
+  state: privacyRecordState("state").notNull().default("ACTIVE"),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  createdAt: timestamptz("created_at").notNull().defaultNow(),
+  updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+});
+
+export const privacyNotices = pgTable("privacy_notices", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  noticeKey: text("notice_key").notNull(),
+  version: integer("version").notNull(),
+  title: text("title").notNull(),
+  effectiveAt: timestamptz("effective_at"),
+  retiredAt: timestamptz("retired_at"),
+  contentHash: char("content_hash", { length: 64 }).notNull(),
+  storageReference: text("storage_reference").notNull(),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  approvedAt: timestamptz("approved_at"),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
+  createdAt: timestamptz("created_at").notNull().defaultNow(),
+});
+
+export const consentRecords = pgTable("consent_records", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+  processingActivityId: uuid("processing_activity_id").references(() => processingActivities.id),
+  subjectReferenceHash: char("subject_reference_hash", { length: 64 }).notNull(),
+  purpose: text("purpose").notNull(),
+  status: text("status").notNull(),
+  noticeId: uuid("notice_id").references(() => privacyNotices.id),
+  capturedAt: timestamptz("captured_at").notNull(),
+  withdrawnAt: timestamptz("withdrawn_at"),
+  provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamptz("created_at").notNull().defaultNow(),
+});
+
 export const dataSubjectRequests = pgTable("data_subject_requests", {
   id: uuid("id").defaultRandom().primaryKey(),
   organizationId: uuid("organization_id").notNull().references(() => organizations.id),

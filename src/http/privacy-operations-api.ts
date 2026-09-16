@@ -16,8 +16,11 @@ import {
   dpiaAssessments,
   internationalTransfers,
   privacyBreaches,
+  privacyNotices,
   processingActivities,
   processors,
+  retentionRules,
+  consentRecords,
 } from "@/db/privacy-schema";
 import {
   createDataSubjectRequest,
@@ -43,6 +46,13 @@ import {
   rejectPrivacyAssuranceCandidate,
 } from "@/domain/privacy/assurance-integration-service";
 import type { ProposePrivacyAssuranceCandidateInput } from "@/domain/privacy/assurance-integration-validation";
+import {
+  approvePrivacyNotice,
+  createRetentionRule,
+  recordConsent,
+  registerPrivacyNotice,
+  withdrawConsent,
+} from "@/domain/privacy/operational-service";
 import type {
   CreateDpiaInput,
   CreateDsrInput,
@@ -96,6 +106,9 @@ async function requirePrivacyRecordInOrganization(
     case "DPIA": records = await transaction.db.select({ id: dpiaAssessments.id }).from(dpiaAssessments).where(and(eq(dpiaAssessments.id, recordId), eq(dpiaAssessments.organizationId, organizationId))).limit(1); break;
     case "PROCESSOR": records = await transaction.db.select({ id: processors.id }).from(processors).where(and(eq(processors.id, recordId), eq(processors.organizationId, organizationId))).limit(1); break;
     case "TRANSFER": records = await transaction.db.select({ id: internationalTransfers.id }).from(internationalTransfers).where(and(eq(internationalTransfers.id, recordId), eq(internationalTransfers.organizationId, organizationId))).limit(1); break;
+    case "RETENTION_RULE": records = await transaction.db.select({ id: retentionRules.id }).from(retentionRules).where(and(eq(retentionRules.id, recordId), eq(retentionRules.organizationId, organizationId))).limit(1); break;
+    case "NOTICE": records = await transaction.db.select({ id: privacyNotices.id }).from(privacyNotices).where(and(eq(privacyNotices.id, recordId), eq(privacyNotices.organizationId, organizationId))).limit(1); break;
+    case "CONSENT": records = await transaction.db.select({ id: consentRecords.id }).from(consentRecords).where(and(eq(consentRecords.id, recordId), eq(consentRecords.organizationId, organizationId))).limit(1); break;
     case "DSR": records = await transaction.db.select({ id: dataSubjectRequests.id }).from(dataSubjectRequests).where(and(eq(dataSubjectRequests.id, recordId), eq(dataSubjectRequests.organizationId, organizationId))).limit(1); break;
     case "BREACH": records = await transaction.db.select({ id: privacyBreaches.id }).from(privacyBreaches).where(and(eq(privacyBreaches.id, recordId), eq(privacyBreaches.organizationId, organizationId))).limit(1); break;
     default: throw new Error("This privacy record type cannot be linked to assurance work yet");
@@ -118,6 +131,12 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
               .where(eq(engagements.organizationId, organizationId)).orderBy(desc(engagements.createdAt)),
             assuranceCandidates: await tx.db.select().from(privacyAssuranceCandidates)
               .where(eq(privacyAssuranceCandidates.organizationId, organizationId)).orderBy(desc(privacyAssuranceCandidates.proposedAt)),
+            retentionRules: await tx.db.select().from(retentionRules)
+              .where(eq(retentionRules.organizationId, organizationId)).orderBy(desc(retentionRules.createdAt)),
+            notices: await tx.db.select().from(privacyNotices)
+              .where(eq(privacyNotices.organizationId, organizationId)).orderBy(desc(privacyNotices.createdAt)),
+            consents: await tx.db.select().from(consentRecords)
+              .where(eq(consentRecords.organizationId, organizationId)).orderBy(desc(consentRecords.createdAt)),
             activities: await tx.db.select().from(processingActivities)
               .where(eq(processingActivities.organizationId, organizationId)).orderBy(desc(processingActivities.createdAt)),
             dpias: await tx.db.select().from(dpiaAssessments)
@@ -288,6 +307,43 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
                 await requirePrivacyRecordInOrganization(tx, input.privacyRecordType, input.privacyRecordId);
                 return json(await proposePrivacyAssuranceCandidate(tx, input), 201);
               }
+              case "create_retention_rule": {
+                const disposalMethod = optionalText(body, "disposalMethod");
+                const legalBasisReference = optionalText(body, "legalBasisReference");
+                return json(await createRetentionRule(tx, {
+                  processingActivityId: requiredText(body, "processingActivityId"),
+                  dataCategory: requiredText(body, "dataCategory"),
+                  retentionPeriod: requiredText(body, "retentionPeriod"),
+                  triggerEvent: requiredText(body, "triggerEvent"),
+                  ...(disposalMethod ? { disposalMethod } : {}),
+                  ...(legalBasisReference ? { legalBasisReference } : {}),
+                }), 201);
+              }
+              case "register_notice": {
+                const effectiveAt = optionalText(body, "effectiveAt");
+                return json(await registerPrivacyNotice(tx, {
+                  noticeKey: requiredText(body, "noticeKey"),
+                  title: requiredText(body, "title"),
+                  contentHash: requiredText(body, "contentHash"),
+                  storageReference: requiredText(body, "storageReference"),
+                  ...(effectiveAt ? { effectiveAt } : {}),
+                }), 201);
+              }
+              case "approve_notice":
+                return json(await approvePrivacyNotice(tx, requiredText(body, "noticeId")));
+              case "record_consent": {
+                const processingActivityId = optionalText(body, "processingActivityId");
+                const noticeId = optionalText(body, "noticeId");
+                return json(await recordConsent(tx, {
+                  subjectReferenceHash: requiredText(body, "subjectReferenceHash"),
+                  purpose: requiredText(body, "purpose"),
+                  capturedAt: requiredText(body, "capturedAt"),
+                  ...(processingActivityId ? { processingActivityId } : {}),
+                  ...(noticeId ? { noticeId } : {}),
+                }), 201);
+              }
+              case "withdraw_consent":
+                return json(await withdrawConsent(tx, requiredText(body, "consentId")));
               case "accept_assurance_candidate":
                 return json(await acceptPrivacyAssuranceCandidate(tx, requiredText(body, "candidateId"), requiredText(body, "rationale")));
               case "reject_assurance_candidate":
