@@ -76,7 +76,12 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
         output = { message: raw.trim() };
       }
     }
-    if (!response.ok) throw new Error(output.message ?? `The governed change could not be saved (HTTP ${response.status})`);
+    if (!response.ok) {
+      const message = output.message ?? `The governed change could not be saved (HTTP ${response.status})`;
+      if (/creator cannot approve|cannot approve the same/i.test(message)) throw new Error("An independent reviewer must approve a record created by you.");
+      if (/Active processor requires/i.test(message)) throw new Error("Complete the processor contract, DPA, security review, and due-diligence details before approval.");
+      throw new Error(message);
+    }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>, action: string) {
@@ -153,8 +158,18 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     ...(data?.dsrs ?? []).map((item) => ({ ...item, privacyRecordType: "DSR" })),
     ...(data?.breaches ?? []).map((item) => ({ ...item, privacyRecordType: "BREACH" })),
   ];
+  const advisorySummary = [
+    ["Active ROPA", activities.filter((item) => item.state === "ACTIVE").length],
+    ["Open DPIAs", (data?.dpias ?? []).filter((item) => item.decision !== "APPROVED" && item.decision !== "NOT_REQUIRED").length],
+    ["Pending processors", (data?.processors ?? []).filter((item) => item.status !== "ACTIVE").length],
+    ["Pending transfers", (data?.transfers ?? []).filter((item) => item.state !== "ACTIVE").length],
+    ["Open alerts", (data?.alerts ?? []).filter((item) => item.status !== "RESOLVED").length],
+    ["Open DSRs", (data?.dsrs ?? []).filter((item) => item.status !== "COMPLETED").length],
+    ["Open breaches", (data?.breaches ?? []).filter((item) => item.status !== "CLOSED").length],
+  ];
   return <div className="admin-stack">
     <p className="form-message" role="status">{message}</p>
+    <section className="workspace-panel"><div className="section-heading"><div><p className="eyebrow">Advisory overview</p><h2>Operations summary</h2></div></div><div className="data-list">{advisorySummary.map(([label, count]) => <article className="data-row" key={label as string}><strong>{label}</strong><span>{count}</span></article>)}</div></section>
     <Panel
       title="ROPA / processing activities"
       items={activities}
