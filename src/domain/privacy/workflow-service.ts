@@ -156,6 +156,62 @@ export async function activateProcessor(
   return updated;
 }
 
+export async function updateProcessorDueDiligence(
+  transaction: AuthorizedTenantTransaction,
+  processorId: string,
+  input: {
+    serviceDescription: string;
+    country?: string;
+    contractReference: string;
+    dpaReference: string;
+    securityReviewStatus: string;
+  },
+) {
+  requirePermission(transaction.membership.role, permissions.privacyManage);
+  const candidate = await requireTenantRecord(
+    await transaction.db.select().from(processors).where(and(
+      eq(processors.id, processorId),
+      eq(processors.organizationId, transaction.context.organizationId),
+    )).limit(1),
+    "Processor",
+  );
+  if (candidate.status === "ACTIVE") {
+    throw new Error("An active processor cannot be edited; suspend it before changing due-diligence details");
+  }
+  const [updated] = await transaction.db.update(processors).set({
+    serviceDescription: input.serviceDescription.trim(),
+    country: input.country?.trim() || null,
+    contractReference: input.contractReference.trim(),
+    dpaReference: input.dpaReference.trim(),
+    securityReviewStatus: input.securityReviewStatus.trim(),
+    updatedAt: new Date(),
+  }).where(eq(processors.id, candidate.id)).returning();
+  if (!updated) throw new Error("Processor due-diligence update did not return a row");
+  await recordDomainChange(transaction, {
+    eventType: "privacy.processor.updated",
+    aggregateType: "processor",
+    aggregateId: updated.id,
+    action: "privacy.processor.update",
+    entityType: "processor",
+    oldValues: {
+      serviceDescription: candidate.serviceDescription,
+      country: candidate.country,
+      contractReference: candidate.contractReference,
+      dpaReference: candidate.dpaReference,
+      securityReviewStatus: candidate.securityReviewStatus,
+    },
+    newValues: {
+      serviceDescription: updated.serviceDescription,
+      country: updated.country,
+      contractReference: updated.contractReference,
+      dpaReference: updated.dpaReference,
+      securityReviewStatus: updated.securityReviewStatus,
+    },
+    payload: { processorId: updated.id, status: updated.status },
+  });
+  return updated;
+}
+
 export async function submitTransferForReview(
   transaction: AuthorizedTenantTransaction,
   transferId: string,

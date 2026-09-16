@@ -40,6 +40,7 @@ import {
   submitTransferForReview,
   transitionDsr,
   transitionPrivacyBreach,
+  updateProcessorDueDiligence,
 } from "@/domain/privacy/workflow-service";
 import {
   acceptPrivacyAssuranceCandidate,
@@ -274,6 +275,16 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
                 return json(await approveInProgressDpia(tx, requiredText(body, "dpiaId")));
               case "activate_processor":
                 return json(await activateProcessor(tx, requiredText(body, "processorId"), optionalDate(body, "nextReviewAt")));
+              case "update_processor": {
+                const country = optionalText(body, "country");
+                return json(await updateProcessorDueDiligence(tx, requiredText(body, "processorId"), {
+                  serviceDescription: requiredText(body, "serviceDescription"),
+                  contractReference: requiredText(body, "contractReference"),
+                  dpaReference: requiredText(body, "dpaReference"),
+                  securityReviewStatus: requiredText(body, "securityReviewStatus"),
+                  ...(country ? { country } : {}),
+                }));
+              }
               case "submit_transfer":
                 return json(await submitTransferForReview(tx, requiredText(body, "transferId")));
               case "approve_transfer":

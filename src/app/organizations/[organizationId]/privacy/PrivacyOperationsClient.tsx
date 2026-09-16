@@ -20,6 +20,11 @@ type Item = {
   severity?: string;
   dataCategory?: string;
   purpose?: string;
+  serviceDescription?: string;
+  country?: string | null;
+  contractReference?: string | null;
+  dpaReference?: string | null;
+  securityReviewStatus?: string | null;
 };
 
 type Data = {
@@ -145,6 +150,30 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     }
   }
 
+  async function editProcessor(item: Item) {
+    const serviceDescription = window.prompt("Service description", item.serviceDescription ?? "");
+    if (!serviceDescription?.trim()) return;
+    const contractReference = window.prompt("Contract reference", item.contractReference ?? "");
+    if (!contractReference?.trim()) return;
+    const dpaReference = window.prompt("DPA reference", item.dpaReference ?? "");
+    if (!dpaReference?.trim()) return;
+    const securityReviewStatus = window.prompt("Security review status", item.securityReviewStatus ?? "");
+    if (!securityReviewStatus?.trim()) return;
+    if (securityReviewStatus.trim() !== "APPROVED") {
+      setMessage("Security review status must be APPROVED before a processor can be activated.");
+      return;
+    }
+    const country = window.prompt("Country (optional)", item.country ?? "");
+    setMessage("Updating processor due diligence…");
+    try {
+      await send({ action: "update_processor", processorId: item.id, serviceDescription, contractReference, dpaReference, securityReviewStatus, country: country ?? "" });
+      await load();
+      setMessage("Processor due-diligence details updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update processor due-diligence details");
+    }
+  }
+
   const activities = data?.activities ?? [];
   const privacyRecords = [
     ...activities.map((item) => ({ ...item, privacyRecordType: "PROCESSING_ACTIVITY" })),
@@ -209,8 +238,8 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     <Panel
       title="Processors and transfer assessments"
       items={[...(data?.processors ?? []), ...(data?.transfers ?? [])]}
-      actions={(item) => item.name && item.status !== "ACTIVE"
-        ? <button type="button" className="secondary-button" onClick={() => transition("activate_processor", "processorId", item.id)}>Approve processor</button>
+      actions={(item) => item.name
+        ? <><button type="button" className="secondary-button" onClick={() => editProcessor(item)}>Edit due diligence</button>{item.status !== "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => transition("activate_processor", "processorId", item.id)}>Approve processor</button> : null}</>
         : item.destinationCountry && item.state === "DRAFT"
           ? <button type="button" className="secondary-button" onClick={() => transition("submit_transfer", "transferId", item.id)}>Send for review</button>
           : item.destinationCountry && item.state === "UNDER_REVIEW"
