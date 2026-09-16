@@ -68,7 +68,8 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
   async function submit(event: FormEvent<HTMLFormElement>, action: string) {
     event.preventDefault();
     setMessage("Saving governed record…");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const body: Record<string, unknown> = { ...Object.fromEntries(form.entries()), action };
     ["dataSubjectCategories", "personalDataCategories", "recipients", "dataCategories"].forEach((key) => {
       if (key in body) body[key] = list(form.get(key));
@@ -89,7 +90,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     }
     try {
       await send(body);
-      event.currentTarget.reset();
+      formElement.reset();
       await load();
       setMessage("Record saved.");
     } catch (error) {
