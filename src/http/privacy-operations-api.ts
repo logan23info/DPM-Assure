@@ -56,6 +56,7 @@ import {
   createRetentionRule,
   recordConsent,
   registerPrivacyNotice,
+  retirePrivacyNotice,
   withdrawConsent,
 } from "@/domain/privacy/operational-service";
 import {
@@ -360,6 +361,8 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
               }
               case "approve_notice":
                 return json(await approvePrivacyNotice(tx, requiredText(body, "noticeId")));
+              case "retire_notice":
+                return json(await retirePrivacyNotice(tx, requiredText(body, "noticeId")));
               case "record_consent": {
                 const processingActivityId = optionalText(body, "processingActivityId");
                 const noticeId = optionalText(body, "noticeId");

@@ -120,6 +120,27 @@ export async function approvePrivacyNotice(transaction: AuthorizedTenantTransact
   return approved;
 }
 
+export async function retirePrivacyNotice(transaction: AuthorizedTenantTransaction, noticeId: string) {
+  requirePermission(transaction.membership.role, permissions.privacyManage);
+  const [candidate] = await transaction.db.select().from(privacyNotices).where(and(
+    eq(privacyNotices.id, noticeId), eq(privacyNotices.organizationId, transaction.context.organizationId),
+  )).limit(1);
+  if (!candidate) throw new Error("Privacy notice was not found in the authorized organization");
+  if (!candidate.approvedAt) throw new Error("Only an approved privacy notice can be retired");
+  if (candidate.retiredAt) return candidate;
+  const [retired] = await transaction.db.update(privacyNotices).set({ retiredAt: new Date() })
+    .where(eq(privacyNotices.id, candidate.id)).returning();
+  if (!retired) throw new Error("Privacy notice retirement did not return a row");
+  await recordDomainChange(transaction, {
+    eventType: "privacy.notice.retired", aggregateType: "privacy_notice", aggregateId: retired.id,
+    action: "privacy.notice.retire", entityType: "privacy_notice",
+    oldValues: { retiredAt: candidate.retiredAt },
+    newValues: { retiredAt: retired.retiredAt },
+    payload: { noticeId: retired.id, noticeKey: retired.noticeKey, version: retired.version },
+  });
+  return retired;
+}
+
 export async function recordConsent(transaction: AuthorizedTenantTransaction, input: {
   subjectReferenceHash: string;
   purpose: string;
@@ -131,10 +152,12 @@ export async function recordConsent(transaction: AuthorizedTenantTransaction, in
   requirePermission(transaction.membership.role, permissions.privacyManage);
   if (input.processingActivityId) await requireActivity(transaction, input.processingActivityId);
   if (input.noticeId) {
-    const [notice] = await transaction.db.select({ id: privacyNotices.id }).from(privacyNotices).where(and(
+    const [notice] = await transaction.db.select({ id: privacyNotices.id, approvedAt: privacyNotices.approvedAt, retiredAt: privacyNotices.retiredAt }).from(privacyNotices).where(and(
       eq(privacyNotices.id, input.noticeId), eq(privacyNotices.organizationId, transaction.context.organizationId),
     )).limit(1);
     if (!notice) throw new Error("Privacy notice was not found in the authorized organization");
+    if (!notice.approvedAt) throw new Error("Consent must reference an approved privacy notice");
+    if (notice.retiredAt) throw new Error("Consent cannot reference a retired privacy notice");
   }
   const [created] = await transaction.db.insert(consentRecords).values({
     organizationId: transaction.context.organizationId,

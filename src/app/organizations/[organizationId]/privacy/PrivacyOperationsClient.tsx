@@ -16,6 +16,7 @@ type Item = {
   suggestedTitle?: string;
   noticeKey?: string;
   approvedAt?: string | null;
+  retiredAt?: string | null;
   alertType?: string;
   severity?: string;
   dataCategory?: string;
@@ -340,6 +341,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
       title="Retention, notices and consent"
       items={[...(data?.retentionRules ?? []), ...(data?.notices ?? []), ...(data?.consents ?? [])]}
       actions={(item) => item.noticeKey && !item.approvedAt ? <button type="button" className="secondary-button" onClick={() => transition("approve_notice", "noticeId", item.id)}>Approve notice</button>
+        : item.noticeKey && item.approvedAt && !item.retiredAt ? <button type="button" className="secondary-button" onClick={() => transition("retire_notice", "noticeId", item.id)}>Retire notice</button>
         : item.status === "GIVEN" ? <button type="button" className="secondary-button" onClick={() => transition("withdraw_consent", "consentId", item.id)}>Withdraw consent</button> : null}
       render={<>
         <form className="privacy-form" onSubmit={(event) => submit(event, "create_retention_rule")}>
@@ -363,7 +365,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
           <input name="subjectReferenceHash" required placeholder="Lowercase SHA-256 subject reference" />
           <input name="purpose" required placeholder="Consent purpose" />
           <select name="processingActivityId"><option value="">No activity linkage</option>{activities.map((activity) => <option key={activity.id} value={activity.id}>{activity.name}</option>)}</select>
-          <select name="noticeId"><option value="">No notice linkage</option>{data?.notices.map((notice) => <option key={notice.id} value={notice.id}>{notice.title ?? notice.noticeKey}</option>)}</select>
+          <select name="noticeId"><option value="">No notice linkage</option>{data?.notices.filter((notice) => notice.approvedAt && !notice.retiredAt).map((notice) => <option key={notice.id} value={notice.id}>{notice.title ?? notice.noticeKey}</option>)}</select>
           <button className="primary-button">Record consent</button>
         </form>
       </>}
