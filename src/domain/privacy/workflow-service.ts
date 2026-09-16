@@ -134,6 +134,12 @@ export async function activateProcessor(
     )).limit(1),
     "Processor",
   );
+  if (candidate.status !== "PROSPECTIVE" && candidate.status !== "SUSPENDED") {
+    throw new Error(`Only a PROSPECTIVE or SUSPENDED processor can be approved; current status is ${candidate.status}`);
+  }
+  if (candidate.createdBy === transaction.principal.userId) {
+    throw new Error("Processor creator cannot approve the same processor");
+  }
   const now = new Date();
   const [updated] = await transaction.db.update(processors).set({
     status: "ACTIVE",
@@ -151,6 +157,37 @@ export async function activateProcessor(
     entityType: "processor",
     oldValues: { status: candidate.status },
     newValues: { status: updated.status, approvedBy: updated.approvedBy, nextReviewAt: updated.nextReviewAt },
+    payload: { processorId: updated.id, status: updated.status },
+  });
+  return updated;
+}
+
+export async function suspendProcessor(
+  transaction: AuthorizedTenantTransaction,
+  processorId: string,
+) {
+  requirePermission(transaction.membership.role, permissions.privacyManage);
+  const candidate = await requireTenantRecord(
+    await transaction.db.select().from(processors).where(and(
+      eq(processors.id, processorId),
+      eq(processors.organizationId, transaction.context.organizationId),
+    )).limit(1),
+    "Processor",
+  );
+  if (candidate.status !== "ACTIVE") throw new Error("Only an ACTIVE processor can be suspended");
+  const [updated] = await transaction.db.update(processors).set({
+    status: "SUSPENDED",
+    updatedAt: new Date(),
+  }).where(eq(processors.id, candidate.id)).returning();
+  if (!updated) throw new Error("Processor suspension did not return a row");
+  await recordDomainChange(transaction, {
+    eventType: "privacy.processor.suspended",
+    aggregateType: "processor",
+    aggregateId: updated.id,
+    action: "privacy.processor.suspend",
+    entityType: "processor",
+    oldValues: { status: candidate.status },
+    newValues: { status: updated.status },
     payload: { processorId: updated.id, status: updated.status },
   });
   return updated;

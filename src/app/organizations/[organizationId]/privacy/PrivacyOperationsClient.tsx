@@ -239,7 +239,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
       title="Processors and transfer assessments"
       items={[...(data?.processors ?? []), ...(data?.transfers ?? [])]}
       actions={(item) => item.name
-        ? <><button type="button" className="secondary-button" onClick={() => editProcessor(item)}>Edit due diligence</button>{item.status !== "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => transition("activate_processor", "processorId", item.id)}>Approve processor</button> : null}</>
+        ? <>{item.status !== "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => editProcessor(item)}>Edit due diligence</button> : null}{item.status === "ACTIVE" ? <button type="button" className="secondary-button" onClick={() => transition("suspend_processor", "processorId", item.id)}>Suspend processor</button> : <button type="button" className="secondary-button" onClick={() => transition("activate_processor", "processorId", item.id)}>Approve processor</button>}</>
         : item.destinationCountry && item.state === "DRAFT"
           ? <button type="button" className="secondary-button" onClick={() => transition("submit_transfer", "transferId", item.id)}>Send for review</button>
           : item.destinationCountry && item.state === "UNDER_REVIEW"

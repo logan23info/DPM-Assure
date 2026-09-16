@@ -36,6 +36,7 @@ import {
   activateProcessor,
   approveInProgressDpia,
   approveTransfer,
+  suspendProcessor,
   startDpiaAssessment,
   submitTransferForReview,
   transitionDsr,
@@ -275,6 +276,8 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
                 return json(await approveInProgressDpia(tx, requiredText(body, "dpiaId")));
               case "activate_processor":
                 return json(await activateProcessor(tx, requiredText(body, "processorId"), optionalDate(body, "nextReviewAt")));
+              case "suspend_processor":
+                return json(await suspendProcessor(tx, requiredText(body, "processorId")));
               case "update_processor": {
                 const country = optionalText(body, "country");
                 return json(await updateProcessorDueDiligence(tx, requiredText(body, "processorId"), {
