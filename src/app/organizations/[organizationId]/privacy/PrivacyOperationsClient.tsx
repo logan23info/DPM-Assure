@@ -84,7 +84,11 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     setMessage("Saving governed record…");
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const body: Record<string, unknown> = { ...Object.fromEntries(form.entries()), action };\n    if (action === "create_processor" && body.securityReviewStatus !== "APPROVED") {\n      setMessage("Security review status must be APPROVED before a processor can be activated.");\n      return;\n    }
+    const body: Record<string, unknown> = { ...Object.fromEntries(form.entries()), action };
+    if (action === "create_processor" && body.securityReviewStatus !== "APPROVED") {
+      setMessage("Security review status must be APPROVED before a processor can be activated.");
+      return;
+    }
     ["dataSubjectCategories", "personalDataCategories", "recipients", "dataCategories"].forEach((key) => {
       if (key in body) body[key] = list(form.get(key));
     });
