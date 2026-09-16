@@ -76,7 +76,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
         output = { message: raw.trim() };
       }
     }
-    if (!response.ok) throw new Error(output.message ?? "The governed change could not be saved");
+    if (!response.ok) throw new Error(output.message ?? `The governed change could not be saved (HTTP ${response.status})`);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>, action: string) {
