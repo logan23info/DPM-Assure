@@ -1,16 +1,257 @@
-// The runtime adapter deliberately strips optional UI fields before delegation.
-// @ts-nocheck
 import "server-only";
+
 import { desc, eq } from "drizzle-orm";
+
 import { withAuthorizedTenantTransaction } from "@/auth/authorize";
-import { AuthenticationRequiredError, requireAuthenticatedPrincipal, type SessionResolver } from "@/auth/session";
+import {
+  AuthenticationRequiredError,
+  requireAuthenticatedPrincipal,
+  type SessionResolver,
+} from "@/auth/session";
 import { AuthorizationDeniedError, permissions } from "@/auth/rbac";
 import { clients } from "@/db/schema";
-import { dataSubjectRequests, dpiaAssessments, internationalTransfers, privacyBreaches, processingActivities, processors } from "@/db/privacy-schema";
-import { createDataSubjectRequest, createDpiaAssessment, createInternationalTransfer, createProcessingActivity, recordPrivacyBreach, registerProcessor } from "@/domain/privacy/service";
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const json=(body:unknown,status=200)=>Response.json(body,{status});
-const strings=(value:unknown)=>Array.isArray(value)?value.filter((item):item is string=>typeof item==="string"):[];
-const withoutUndefined=(value:Record<string,unknown>)=>Object.fromEntries(Object.entries(value).filter(([,candidate])=>candidate!==undefined));
-function errorResponse(error:unknown){if(error instanceof AuthenticationRequiredError)return json({error:"AUTHENTICATION_REQUIRED"},401);if(error instanceof AuthorizationDeniedError)return json({error:"AUTHORIZATION_DENIED"},403);return json({error:"INVALID_REQUEST",message:error instanceof Error?error.message:"Request failed"},400);}
-export function createPrivacyOperationsApi(resolver:SessionResolver){return {async get(organizationId:string){try{if(!UUID.test(organizationId))throw new Error("organizationId must be a UUID");const principal=await requireAuthenticatedPrincipal(resolver);return withAuthorizedTenantTransaction({principal,organizationId,requestId:crypto.randomUUID(),permission:permissions.privacyRead},async tx=>json({clients:await tx.db.select({id:clients.id,name:clients.name}).from(clients).where(eq(clients.organizationId,organizationId)),activities:await tx.db.select().from(processingActivities).where(eq(processingActivities.organizationId,organizationId)).orderBy(desc(processingActivities.createdAt)),dpias:await tx.db.select().from(dpiaAssessments).where(eq(dpiaAssessments.organizationId,organizationId)).orderBy(desc(dpiaAssessments.createdAt)),processors:await tx.db.select().from(processors).where(eq(processors.organizationId,organizationId)).orderBy(desc(processors.createdAt)),transfers:await tx.db.select().from(internationalTransfers).where(eq(internationalTransfers.organizationId,organizationId)).orderBy(desc(internationalTransfers.createdAt)),dsrs:await tx.db.select().from(dataSubjectRequests).where(eq(dataSubjectRequests.organizationId,organizationId)).orderBy(desc(dataSubjectRequests.createdAt)),breaches:await tx.db.select().from(privacyBreaches).where(eq(privacyBreaches.organizationId,organizationId)).orderBy(desc(privacyBreaches.createdAt))}));}catch(error){return errorResponse(error);}},async post(organizationId:string,request:Request){try{if(!UUID.test(organizationId))throw new Error("organizationId must be a UUID");const principal=await requireAuthenticatedPrincipal(resolver);const body=await request.json() as Record<string,unknown>;const get=(key:string)=>{const v=body[key];if(typeof v!=="string")throw new Error(`${key} is required`);return v;};return withAuthorizedTenantTransaction({principal,organizationId,requestId:crypto.randomUUID(),permission:permissions.privacyRead},async tx=>{switch(get("action")){case"create_activity":return json(await createProcessingActivity(tx,{name:get("name"),purpose:get("purpose"),controllerProcessorRole:get("controllerProcessorRole") as "CONTROLLER"|"PROCESSOR"|"JOINT_CONTROLLER",clientId:typeof body.clientId==="string"&&body.clientId?body.clientId:undefined,lawfulBasis:typeof body.lawfulBasis==="string"?body.lawfulBasis:undefined,dataSubjectCategories:strings(body.dataSubjectCategories),personalDataCategories:strings(body.personalDataCategories),recipients:strings(body.recipients),retentionSummary:typeof body.retentionSummary==="string"?body.retentionSummary:undefined,securityMeasuresSummary:typeof body.securityMeasuresSummary==="string"?body.securityMeasuresSummary:undefined}),201);case"create_dpia":return json(await createDpiaAssessment(tx,{processingActivityId:get("processingActivityId"),screeningRationale:get("screeningRationale"),decision:get("decision") as "NOT_REQUIRED"|"REQUIRED"|"IN_PROGRESS"|"REJECTED",riskSummary:typeof body.riskSummary==="string"?body.riskSummary:undefined,mitigationSummary:typeof body.mitigationSummary==="string"?body.mitigationSummary:undefined,residualRisk:typeof body.residualRisk==="string"?body.residualRisk:undefined}),201);case"create_processor":return json(await registerProcessor(tx,{name:get("name"),serviceDescription:get("serviceDescription"),country:typeof body.country==="string"?body.country:undefined,contractReference:typeof body.contractReference==="string"?body.contractReference:undefined,dpaReference:typeof body.dpaReference==="string"?body.dpaReference:undefined,securityReviewStatus:typeof body.securityReviewStatus==="string"?body.securityReviewStatus:undefined}),201);case"create_transfer":return json(await createInternationalTransfer(tx,{processingActivityId:get("processingActivityId"),processorId:typeof body.processorId==="string"&&body.processorId?body.processorId:undefined,destinationCountry:get("destinationCountry"),mechanism:get("mechanism") as "ADEQUACY"|"SCC"|"BCR"|"DEROGATION"|"OTHER",mechanismReference:typeof body.mechanismReference==="string"?body.mechanismReference:undefined,transferRiskAssessmentReference:typeof body.transferRiskAssessmentReference==="string"?body.transferRiskAssessmentReference:undefined,supplementaryMeasures:typeof body.supplementaryMeasures==="string"?body.supplementaryMeasures:undefined}),201);case"create_dsr":return json(await createDataSubjectRequest(tx,{requestType:get("requestType"),subjectReferenceHash:get("subjectReferenceHash"),receivedAt:get("receivedAt"),dueAt:typeof body.dueAt==="string"?body.dueAt:undefined}),201);case"create_breach":return json(await recordPrivacyBreach(tx,{title:get("title"),detectedAt:get("detectedAt"),description:get("description"),dataCategories:strings(body.dataCategories),affectedSubjectsEstimate:typeof body.affectedSubjectsEstimate==="number"?body.affectedSubjectsEstimate:undefined,severity:typeof body.severity==="string"?body.severity:undefined,notificationRequired:typeof body.notificationRequired==="boolean"?body.notificationRequired:undefined,notificationRationale:typeof body.notificationRationale==="string"?body.notificationRationale:undefined}),201);default:throw new Error("Unsupported privacy operation");}});}catch(error){return errorResponse(error);}}};}
+import {
+  dataSubjectRequests,
+  dpiaAssessments,
+  internationalTransfers,
+  privacyBreaches,
+  processingActivities,
+  processors,
+} from "@/db/privacy-schema";
+import {
+  createDataSubjectRequest,
+  createDpiaAssessment,
+  createInternationalTransfer,
+  createProcessingActivity,
+  recordPrivacyBreach,
+  registerProcessor,
+} from "@/domain/privacy/service";
+import {
+  activateProcessingActivity,
+  activateProcessor,
+  approveInProgressDpia,
+  approveTransfer,
+  startDpiaAssessment,
+  submitTransferForReview,
+  transitionDsr,
+  transitionPrivacyBreach,
+} from "@/domain/privacy/workflow-service";
+import type {
+  CreateDpiaInput,
+  CreateDsrInput,
+  CreateProcessingActivityInput,
+  CreateTransferInput,
+  RecordBreachInput,
+  RegisterProcessorInput,
+} from "@/domain/privacy/validation";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const json = (body: unknown, status = 200) => Response.json(body, { status });
+
+const strings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+
+function optionalText(body: Record<string, unknown>, key: string) {
+  const value = body[key];
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function requiredText(body: Record<string, unknown>, key: string) {
+  const value = body[key];
+  if (typeof value !== "string") throw new Error(`${key} is required`);
+  return value;
+}
+
+function optionalDate(body: Record<string, unknown>, key: string) {
+  const value = optionalText(body, key);
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) throw new Error(`${key} must be a valid date-time`);
+  return parsed;
+}
+
+function errorResponse(error: unknown) {
+  if (error instanceof AuthenticationRequiredError) return json({ error: "AUTHENTICATION_REQUIRED" }, 401);
+  if (error instanceof AuthorizationDeniedError) return json({ error: "AUTHORIZATION_DENIED" }, 403);
+  return json({ error: "INVALID_REQUEST", message: error instanceof Error ? error.message : "Request failed" }, 400);
+}
+
+export function createPrivacyOperationsApi(resolver: SessionResolver) {
+  return {
+    async get(organizationId: string) {
+      try {
+        if (!UUID.test(organizationId)) throw new Error("organizationId must be a UUID");
+        const principal = await requireAuthenticatedPrincipal(resolver);
+        return withAuthorizedTenantTransaction(
+          { principal, organizationId, requestId: crypto.randomUUID(), permission: permissions.privacyRead },
+          async (tx) => json({
+            clients: await tx.db.select({ id: clients.id, name: clients.name }).from(clients)
+              .where(eq(clients.organizationId, organizationId)),
+            activities: await tx.db.select().from(processingActivities)
+              .where(eq(processingActivities.organizationId, organizationId)).orderBy(desc(processingActivities.createdAt)),
+            dpias: await tx.db.select().from(dpiaAssessments)
+              .where(eq(dpiaAssessments.organizationId, organizationId)).orderBy(desc(dpiaAssessments.createdAt)),
+            processors: await tx.db.select().from(processors)
+              .where(eq(processors.organizationId, organizationId)).orderBy(desc(processors.createdAt)),
+            transfers: await tx.db.select().from(internationalTransfers)
+              .where(eq(internationalTransfers.organizationId, organizationId)).orderBy(desc(internationalTransfers.createdAt)),
+            dsrs: await tx.db.select().from(dataSubjectRequests)
+              .where(eq(dataSubjectRequests.organizationId, organizationId)).orderBy(desc(dataSubjectRequests.createdAt)),
+            breaches: await tx.db.select().from(privacyBreaches)
+              .where(eq(privacyBreaches.organizationId, organizationId)).orderBy(desc(privacyBreaches.createdAt)),
+          }),
+        );
+      } catch (error) {
+        return errorResponse(error);
+      }
+    },
+
+    async post(organizationId: string, request: Request) {
+      try {
+        if (!UUID.test(organizationId)) throw new Error("organizationId must be a UUID");
+        const principal = await requireAuthenticatedPrincipal(resolver);
+        const body = await request.json() as Record<string, unknown>;
+
+        return withAuthorizedTenantTransaction(
+          { principal, organizationId, requestId: crypto.randomUUID(), permission: permissions.privacyRead },
+          async (tx) => {
+            switch (requiredText(body, "action")) {
+              case "create_activity": {
+                const clientId = optionalText(body, "clientId");
+                const lawfulBasis = optionalText(body, "lawfulBasis");
+                const retentionSummary = optionalText(body, "retentionSummary");
+                const securityMeasuresSummary = optionalText(body, "securityMeasuresSummary");
+                const input: CreateProcessingActivityInput = {
+                  name: requiredText(body, "name"),
+                  purpose: requiredText(body, "purpose"),
+                  controllerProcessorRole: requiredText(body, "controllerProcessorRole") as CreateProcessingActivityInput["controllerProcessorRole"],
+                  dataSubjectCategories: strings(body.dataSubjectCategories),
+                  personalDataCategories: strings(body.personalDataCategories),
+                  recipients: strings(body.recipients),
+                  ...(clientId ? { clientId } : {}),
+                  ...(lawfulBasis ? { lawfulBasis } : {}),
+                  ...(retentionSummary ? { retentionSummary } : {}),
+                  ...(securityMeasuresSummary ? { securityMeasuresSummary } : {}),
+                };
+                return json(await createProcessingActivity(tx, input), 201);
+              }
+              case "create_dpia": {
+                const riskSummary = optionalText(body, "riskSummary");
+                const mitigationSummary = optionalText(body, "mitigationSummary");
+                const residualRisk = optionalText(body, "residualRisk");
+                const input: CreateDpiaInput = {
+                  processingActivityId: requiredText(body, "processingActivityId"),
+                  screeningRationale: requiredText(body, "screeningRationale"),
+                  decision: requiredText(body, "decision") as CreateDpiaInput["decision"],
+                  ...(riskSummary ? { riskSummary } : {}),
+                  ...(mitigationSummary ? { mitigationSummary } : {}),
+                  ...(residualRisk ? { residualRisk } : {}),
+                };
+                return json(await createDpiaAssessment(tx, input), 201);
+              }
+              case "create_processor": {
+                const country = optionalText(body, "country");
+                const contractReference = optionalText(body, "contractReference");
+                const dpaReference = optionalText(body, "dpaReference");
+                const securityReviewStatus = optionalText(body, "securityReviewStatus");
+                const input: RegisterProcessorInput = {
+                  name: requiredText(body, "name"),
+                  serviceDescription: requiredText(body, "serviceDescription"),
+                  ...(country ? { country } : {}),
+                  ...(contractReference ? { contractReference } : {}),
+                  ...(dpaReference ? { dpaReference } : {}),
+                  ...(securityReviewStatus ? { securityReviewStatus } : {}),
+                };
+                return json(await registerProcessor(tx, input), 201);
+              }
+              case "create_transfer": {
+                const processorId = optionalText(body, "processorId");
+                const mechanismReference = optionalText(body, "mechanismReference");
+                const transferRiskAssessmentReference = optionalText(body, "transferRiskAssessmentReference");
+                const supplementaryMeasures = optionalText(body, "supplementaryMeasures");
+                const input: CreateTransferInput = {
+                  processingActivityId: requiredText(body, "processingActivityId"),
+                  destinationCountry: requiredText(body, "destinationCountry"),
+                  mechanism: requiredText(body, "mechanism") as CreateTransferInput["mechanism"],
+                  ...(processorId ? { processorId } : {}),
+                  ...(mechanismReference ? { mechanismReference } : {}),
+                  ...(transferRiskAssessmentReference ? { transferRiskAssessmentReference } : {}),
+                  ...(supplementaryMeasures ? { supplementaryMeasures } : {}),
+                };
+                return json(await createInternationalTransfer(tx, input), 201);
+              }
+              case "create_dsr": {
+                const dueAt = optionalText(body, "dueAt");
+                const input: CreateDsrInput = {
+                  requestType: requiredText(body, "requestType"),
+                  subjectReferenceHash: requiredText(body, "subjectReferenceHash"),
+                  receivedAt: requiredText(body, "receivedAt"),
+                  ...(dueAt ? { dueAt } : {}),
+                };
+                return json(await createDataSubjectRequest(tx, input), 201);
+              }
+              case "create_breach": {
+                const affectedSubjectsEstimate = body.affectedSubjectsEstimate;
+                const severity = optionalText(body, "severity");
+                const notificationRationale = optionalText(body, "notificationRationale");
+                const notificationRequired = body.notificationRequired;
+                const input: RecordBreachInput = {
+                  title: requiredText(body, "title"),
+                  detectedAt: requiredText(body, "detectedAt"),
+                  description: requiredText(body, "description"),
+                  dataCategories: strings(body.dataCategories),
+                  ...(typeof affectedSubjectsEstimate === "number" ? { affectedSubjectsEstimate } : {}),
+                  ...(severity ? { severity } : {}),
+                  ...(typeof notificationRequired === "boolean" ? { notificationRequired } : {}),
+                  ...(notificationRationale ? { notificationRationale } : {}),
+                };
+                return json(await recordPrivacyBreach(tx, input), 201);
+              }
+              case "activate_activity":
+                return json(await activateProcessingActivity(tx, requiredText(body, "activityId"), optionalDate(body, "nextReviewAt")));
+              case "start_dpia":
+                return json(await startDpiaAssessment(tx, requiredText(body, "dpiaId")));
+              case "approve_dpia":
+                return json(await approveInProgressDpia(tx, requiredText(body, "dpiaId")));
+              case "activate_processor":
+                return json(await activateProcessor(tx, requiredText(body, "processorId"), optionalDate(body, "nextReviewAt")));
+              case "submit_transfer":
+                return json(await submitTransferForReview(tx, requiredText(body, "transferId")));
+              case "approve_transfer":
+                return json(await approveTransfer(tx, requiredText(body, "transferId"), optionalDate(body, "nextReviewAt")));
+              case "transition_dsr": {
+                const identityVerifiedAt = optionalDate(body, "identityVerifiedAt");
+                const outcome = optionalText(body, "outcome");
+                return json(await transitionDsr(tx, requiredText(body, "dsrId"), {
+                  status: requiredText(body, "status") as Parameters<typeof transitionDsr>[2]["status"],
+                  ...(identityVerifiedAt ? { identityVerifiedAt } : {}),
+                  ...(outcome ? { outcome } : {}),
+                }));
+              }
+              case "transition_breach": {
+                const notificationRequired = body.notificationRequired;
+                const authorityNotifiedAt = optionalDate(body, "authorityNotifiedAt");
+                const subjectsNotifiedAt = optionalDate(body, "subjectsNotifiedAt");
+                const containmentSummary = optionalText(body, "containmentSummary");
+                const notificationRationale = optionalText(body, "notificationRationale");
+                return json(await transitionPrivacyBreach(tx, requiredText(body, "breachId"), {
+                  status: requiredText(body, "status") as Parameters<typeof transitionPrivacyBreach>[2]["status"],
+                  ...(containmentSummary ? { containmentSummary } : {}),
+                  ...(typeof notificationRequired === "boolean" ? { notificationRequired } : {}),
+                  ...(notificationRationale ? { notificationRationale } : {}),
+                  ...(authorityNotifiedAt ? { authorityNotifiedAt } : {}),
+                  ...(subjectsNotifiedAt ? { subjectsNotifiedAt } : {}),
+                }));
+              }
+              default:
+                throw new Error("Unsupported privacy operation");
+            }
+          },
+        );
+      } catch (error) {
+        return errorResponse(error);
+      }
+    },
+  };
+}
