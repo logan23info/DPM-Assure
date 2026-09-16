@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, like } from "drizzle-orm";
 
 import { withAuthorizedTenantTransaction } from "@/auth/authorize";
 import {
@@ -9,7 +9,7 @@ import {
   type SessionResolver,
 } from "@/auth/session";
 import { AuthorizationDeniedError, permissions } from "@/auth/rbac";
-import { clients, engagements } from "@/db/schema";
+import { auditLogs, clients, engagements } from "@/db/schema";
 import { privacyAssuranceCandidates } from "@/db/privacy-assurance-schema";
 import { privacyAlerts } from "@/db/privacy-alert-schema";
 import {
@@ -166,6 +166,16 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
               .where(eq(dataSubjectRequests.organizationId, organizationId)).orderBy(desc(dataSubjectRequests.createdAt)),
             breaches: await tx.db.select().from(privacyBreaches)
               .where(eq(privacyBreaches.organizationId, organizationId)).orderBy(desc(privacyBreaches.createdAt)),
+            auditTrail: await tx.db.select({
+              id: auditLogs.id,
+              action: auditLogs.action,
+              entityType: auditLogs.entityType,
+              entityId: auditLogs.entityId,
+              timestamp: auditLogs.timestamp,
+            }).from(auditLogs).where(and(
+              eq(auditLogs.organizationId, organizationId),
+              like(auditLogs.action, "privacy.%"),
+            )).orderBy(desc(auditLogs.timestamp)).limit(25),
           }),
         );
       } catch (error) {

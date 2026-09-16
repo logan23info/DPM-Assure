@@ -18,6 +18,8 @@ type Item = {
   approvedAt?: string | null;
   retiredAt?: string | null;
   alertType?: string;
+  action?: string;
+  timestamp?: string;
   severity?: string;
   notificationRequired?: boolean | null;
   dataCategory?: string;
@@ -57,6 +59,7 @@ type Data = {
   transfers: Item[];
   dsrs: Item[];
   breaches: Item[];
+  auditTrail: Item[];
 };
 
 const list = (value: FormDataEntryValue | null) =>
@@ -491,6 +494,11 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
         : item.status === "ACKNOWLEDGED" ? <button type="button" className="secondary-button" onClick={() => transition("resolve_privacy_alert", "alertId", item.id)}>Resolve</button> : null}
       render={<button type="button" className="primary-button" onClick={() => transition("refresh_privacy_alerts", "organizationId", organizationId)}>Refresh scheduled alerts</button>}
     />
+    <Panel
+      title="Privacy audit history"
+      items={data?.auditTrail ?? []}
+      render={<p className="lede compact">The 25 most recent privacy-operation events. Historical values remain in the append-only audit record.</p>}
+    />
   </div>;
 }
 
@@ -500,7 +508,7 @@ function Panel({ title, items, render, actions }: { title: string; items: Item[]
     {render}
     <div className="data-list">
       {items.length ? items.map((item) => <article className="data-row" key={item.id}>
-        <div><strong>{item.suggestedTitle ?? item.name ?? item.title ?? item.destinationCountry ?? item.dataCategory ?? item.purpose ?? item.requestType ?? item.alertType ?? "Privacy record"}</strong><span>{item.state ?? item.status ?? item.decision ?? item.severity ?? item.candidateType ?? "Recorded"}</span></div>
+        <div><strong>{item.suggestedTitle ?? item.name ?? item.title ?? item.destinationCountry ?? item.dataCategory ?? item.purpose ?? item.requestType ?? item.alertType ?? item.action ?? "Privacy record"}</strong><span>{item.timestamp ? new Date(item.timestamp).toLocaleString() : item.state ?? item.status ?? item.decision ?? item.severity ?? item.candidateType ?? "Recorded"}</span></div>
         {actions?.(item)}
       </article>) : <div className="empty-state">No records yet.</div>}
     </div>
