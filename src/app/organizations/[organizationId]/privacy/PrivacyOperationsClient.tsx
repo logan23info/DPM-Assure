@@ -16,6 +16,8 @@ type Item = {
   suggestedTitle?: string;
   noticeKey?: string;
   approvedAt?: string | null;
+  alertType?: string;
+  severity?: string;
 };
 
 type Data = {
@@ -25,6 +27,7 @@ type Data = {
   retentionRules: Item[];
   notices: Item[];
   consents: Item[];
+  alerts: Item[];
   activities: Item[];
   dpias: Item[];
   processors: Item[];
@@ -125,6 +128,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
     ...(data?.retentionRules ?? []).map((item) => ({ ...item, privacyRecordType: "RETENTION_RULE" })),
     ...(data?.notices ?? []).map((item) => ({ ...item, privacyRecordType: "NOTICE" })),
     ...(data?.consents ?? []).map((item) => ({ ...item, privacyRecordType: "CONSENT" })),
+    ...(data?.alerts ?? []).map((item) => ({ ...item, privacyRecordType: "PRIVACY_ALERT" })),
     ...(data?.dsrs ?? []).map((item) => ({ ...item, privacyRecordType: "DSR" })),
     ...(data?.breaches ?? []).map((item) => ({ ...item, privacyRecordType: "BREACH" })),
   ];
@@ -274,6 +278,13 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
         </form>
       </>}
     />
+    <Panel
+      title="Privacy alerts"
+      items={data?.alerts ?? []}
+      actions={(item) => item.status === "OPEN" ? <button type="button" className="secondary-button" onClick={() => transition("acknowledge_privacy_alert", "alertId", item.id)}>Acknowledge</button>
+        : item.status === "ACKNOWLEDGED" ? <button type="button" className="secondary-button" onClick={() => transition("resolve_privacy_alert", "alertId", item.id)}>Resolve</button> : null}
+      render={<button type="button" className="primary-button" onClick={() => transition("refresh_privacy_alerts", "organizationId", organizationId)}>Refresh scheduled alerts</button>}
+    />
   </div>;
 }
 
@@ -283,7 +294,7 @@ function Panel({ title, items, render, actions }: { title: string; items: Item[]
     {render}
     <div className="data-list">
       {items.length ? items.map((item) => <article className="data-row" key={item.id}>
-        <div><strong>{item.suggestedTitle ?? item.name ?? item.title ?? item.destinationCountry ?? item.requestType ?? "Privacy record"}</strong><span>{item.state ?? item.status ?? item.decision ?? item.candidateType ?? "Recorded"}</span></div>
+        <div><strong>{item.suggestedTitle ?? item.name ?? item.title ?? item.destinationCountry ?? item.requestType ?? item.alertType ?? "Privacy record"}</strong><span>{item.state ?? item.status ?? item.decision ?? item.severity ?? item.candidateType ?? "Recorded"}</span></div>
         {actions?.(item)}
       </article>) : <div className="empty-state">No records yet.</div>}
     </div>

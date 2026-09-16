@@ -11,6 +11,7 @@ import {
 import { AuthorizationDeniedError, permissions } from "@/auth/rbac";
 import { clients, engagements } from "@/db/schema";
 import { privacyAssuranceCandidates } from "@/db/privacy-assurance-schema";
+import { privacyAlerts } from "@/db/privacy-alert-schema";
 import {
   dataSubjectRequests,
   dpiaAssessments,
@@ -53,6 +54,11 @@ import {
   registerPrivacyNotice,
   withdrawConsent,
 } from "@/domain/privacy/operational-service";
+import {
+  acknowledgePrivacyAlert,
+  refreshPrivacyAlerts,
+  resolvePrivacyAlert,
+} from "@/domain/privacy/alerts-service";
 import type {
   CreateDpiaInput,
   CreateDsrInput,
@@ -111,6 +117,7 @@ async function requirePrivacyRecordInOrganization(
     case "CONSENT": records = await transaction.db.select({ id: consentRecords.id }).from(consentRecords).where(and(eq(consentRecords.id, recordId), eq(consentRecords.organizationId, organizationId))).limit(1); break;
     case "DSR": records = await transaction.db.select({ id: dataSubjectRequests.id }).from(dataSubjectRequests).where(and(eq(dataSubjectRequests.id, recordId), eq(dataSubjectRequests.organizationId, organizationId))).limit(1); break;
     case "BREACH": records = await transaction.db.select({ id: privacyBreaches.id }).from(privacyBreaches).where(and(eq(privacyBreaches.id, recordId), eq(privacyBreaches.organizationId, organizationId))).limit(1); break;
+    case "PRIVACY_ALERT": records = await transaction.db.select({ id: privacyAlerts.id }).from(privacyAlerts).where(and(eq(privacyAlerts.id, recordId), eq(privacyAlerts.organizationId, organizationId))).limit(1); break;
     default: throw new Error("This privacy record type cannot be linked to assurance work yet");
   }
   if (!records[0]) throw new Error("Privacy record was not found in the authorized organization");
@@ -137,6 +144,8 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
               .where(eq(privacyNotices.organizationId, organizationId)).orderBy(desc(privacyNotices.createdAt)),
             consents: await tx.db.select().from(consentRecords)
               .where(eq(consentRecords.organizationId, organizationId)).orderBy(desc(consentRecords.createdAt)),
+            alerts: await tx.db.select().from(privacyAlerts)
+              .where(eq(privacyAlerts.organizationId, organizationId)).orderBy(privacyAlerts.dueAt),
             activities: await tx.db.select().from(processingActivities)
               .where(eq(processingActivities.organizationId, organizationId)).orderBy(desc(processingActivities.createdAt)),
             dpias: await tx.db.select().from(dpiaAssessments)
@@ -344,6 +353,12 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
               }
               case "withdraw_consent":
                 return json(await withdrawConsent(tx, requiredText(body, "consentId")));
+              case "refresh_privacy_alerts":
+                return json({ createdCount: await refreshPrivacyAlerts(tx) });
+              case "acknowledge_privacy_alert":
+                return json(await acknowledgePrivacyAlert(tx, requiredText(body, "alertId")));
+              case "resolve_privacy_alert":
+                return json(await resolvePrivacyAlert(tx, requiredText(body, "alertId")));
               case "accept_assurance_candidate":
                 return json(await acceptPrivacyAssuranceCandidate(tx, requiredText(body, "candidateId"), requiredText(body, "rationale")));
               case "reject_assurance_candidate":
