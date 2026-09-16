@@ -115,7 +115,7 @@ export function PrivacyOperationsClient({ organizationId }: { organizationId: st
   async function transition(action: string, idKey: string, id: string, status?: string) {
     setMessage("Recording governed lifecycle change…");
     try {
-      await send({ action, [idKey]: id, ...(status ? { status } : {}) });
+      await send({ action, [idKey]: id, ...(status ? { status } : {}), ...(action === "transition_dsr" && status === "IDENTITY_VERIFICATION" ? { identityVerifiedAt: new Date().toISOString() } : {}), ...(action === "transition_dsr" && status === "COMPLETED" ? { outcome: "Completed during governed verification" } : {}) });
       await load();
       setMessage("Lifecycle change recorded.");
     } catch (error) {
