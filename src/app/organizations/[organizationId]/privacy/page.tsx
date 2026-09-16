@@ -1,0 +1,3 @@
+import Link from "next/link";import { PrivacyOperationsClient } from "./PrivacyOperationsClient";
+export const dynamic="force-dynamic";
+export default async function Page({params}:{params:Promise<{organizationId:string}>}){const{organizationId}=await params;return <main className="dashboard-shell"><Link className="back-link" href="/dashboard">← Workspace</Link><header className="dashboard-header"><div><p className="eyebrow">Privacy advisory</p><h1>Privacy operations</h1><p className="lede compact">ROPA, DPIAs, third parties, transfers, DSRs and breaches are maintained in a governed register.</p></div></header><PrivacyOperationsClient organizationId={organizationId}/></main>}
