@@ -337,6 +337,73 @@ test("source-backed engagement flows through PBC evidence, gate, review, close a
   });
   expect(independentClosure.result.status).toBe("CLOSED");
 
+  const outcomesPath = `${engagementApiRoot}/outcomes`;
+  const observation = await postJson(request, outcomesPath, ADMIN_SESSION, {
+    action: "create_observation",
+    testResultId: testResult.result.id,
+    observationType: "IMPROVEMENT_OPPORTUNITY",
+    description: "Automate evidence metadata validation while preserving the governed evidence gate",
+    significance: "Release-gate coverage for remediation and independent retesting",
+  });
+  const finding = await postJson(request, outcomesPath, ADMIN_SESSION, {
+    action: "create_finding",
+    sourceType: "OBSERVATION",
+    sourceId: observation.result.id,
+    title: "Evidence metadata automation",
+    description: "Evidence metadata review can be made more efficient without weakening assurance controls",
+    findingType: "PROCESS_IMPROVEMENT",
+  });
+  const findingId = finding.result.id as string;
+
+  const remediation = await postJson(request, outcomesPath, ADMIN_SESSION, {
+    action: "create_remediation",
+    findingId,
+    plan: "Add automated evidence metadata validation and a reviewer-focused metadata summary",
+    targetDate: "2026-10-15",
+  });
+  const remediationId = remediation.result.id as string;
+
+  const prematureRetest = await postJson(request, outcomesPath, REVIEWER_SESSION, {
+    action: "record_retest",
+    findingId,
+    remediationId,
+    result: "NOT_APPLICABLE",
+    conclusion: "A remediation still in progress must not be eligible for retesting",
+  }, 400);
+  expect(prematureRetest.error).toBe("OUTCOME_ACTION_REJECTED");
+  expect(String(prematureRetest.message)).toMatch(/completed before retesting/i);
+
+  await postJson(request, outcomesPath, ADMIN_SESSION, {
+    action: "complete_remediation",
+    remediationId,
+  });
+
+  const selfRetest = await postJson(request, outcomesPath, ADMIN_SESSION, {
+    action: "record_retest",
+    findingId,
+    remediationId,
+    evidenceId,
+    result: "PASS",
+    conclusion: "The remediation completer must not independently verify their own work",
+  }, 400);
+  expect(selfRetest.error).toBe("OUTCOME_ACTION_REJECTED");
+  expect(String(selfRetest.message)).toMatch(/completer cannot independently retest/i);
+
+  const independentRetest = await postJson(request, outcomesPath, REVIEWER_SESSION, {
+    action: "record_retest",
+    findingId,
+    remediationId,
+    evidenceId,
+    result: "PASS",
+    conclusion: "Independent reviewer confirmed the completed remediation using PASS-gated evidence",
+  });
+  expect(independentRetest.result.id).toMatch(/^[0-9a-f-]{36}$/i);
+
+  await postJson(request, outcomesPath, ADMIN_SESSION, {
+    action: "close_finding",
+    findingId,
+  });
+
   const finalizationPath = `${engagementApiRoot}/finalization`;
   await postJson(request, finalizationPath, ADMIN_SESSION, { action: "enter_review" });
 
