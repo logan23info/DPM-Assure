@@ -399,7 +399,7 @@ test("source-backed engagement flows through PBC evidence, gate, review, close a
   });
   expect(independentRetest.result.id).toMatch(/^[0-9a-f-]{36}$/i);
 
-  await postJson(request, outcomesPath, REVIEWER_SESSION, {
+  await postJson(request, outcomesPath, ADMIN_SESSION, {
     action: "close_finding",
     findingId,
   });
