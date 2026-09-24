@@ -318,6 +318,25 @@ test("source-backed engagement flows through PBC evidence, gate, review, close a
   expect(completedPbc.result.status).toBe("COMPLETED");
   expect(completedPbc.result.fulfilledBy).toBe(CLIENT_USER);
 
+  const requesterClosure = await postJson(request, executionPath, ADMIN_SESSION, {
+    action: "close_pbc",
+    input: {
+      pbcRequestId,
+      reason: "Requester must not independently close the same PBC request",
+    },
+  }, 400);
+  expect(requesterClosure.error).toBe("EXECUTION_REJECTED");
+  expect(String(requesterClosure.message)).toMatch(/requester cannot independently close/i);
+
+  const independentClosure = await postJson(request, executionPath, REVIEWER_SESSION, {
+    action: "close_pbc",
+    input: {
+      pbcRequestId,
+      reason: "Independent reviewer verified linked evidence and the passing test conclusion",
+    },
+  });
+  expect(independentClosure.result.status).toBe("CLOSED");
+
   const finalizationPath = `${engagementApiRoot}/finalization`;
   await postJson(request, finalizationPath, ADMIN_SESSION, { action: "enter_review" });
 
