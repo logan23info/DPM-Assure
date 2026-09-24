@@ -44,11 +44,11 @@ test("magic link is single-use and creates a server session", async ({ request }
 test("ORG_ADMIN resolves only its memberships under non-owner RLS", async ({ context, page }) => {
   await setSession(context, ADMIN_SESSION);
   await page.goto("/dashboard");
-  await expect(page.getByRole("heading", { name: "Assurance workspace" })).toBeVisible();
-  await expect(page.getByText("E2E Admin Organization")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "E2E Admin Organization" })).toBeVisible();
   await expect(page.getByText("E2E Other Organization")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Open assurance engagements" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Manage members" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Members" })).toBeVisible();
 
   const denied = await page.goto(`/organizations/${ORG_OTHER}/members`);
   expect(denied?.status()).toBe(404);
@@ -61,11 +61,11 @@ test("ORG_ADMIN resolves only its memberships under non-owner RLS", async ({ con
 test("CLIENT sees only restricted client workflow entry points", async ({ context, page }) => {
   await setSession(context, CLIENT_SESSION);
   await page.goto("/dashboard");
-  await expect(page.getByText("E2E Client Organization")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "E2E Client Organization" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Open client evidence requests" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Open assurance engagements" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "AI assistance" })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Manage members" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Members" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Client portal access" })).toHaveCount(0);
 
   await page.goto(`/organizations/${ORG_CLIENT}/client-portal`);
@@ -75,7 +75,7 @@ test("CLIENT sees only restricted client workflow entry points", async ({ contex
 test("logout revokes the active server session", async ({ context, page, request }) => {
   await setSession(context, ADMIN_SESSION);
   await page.goto("/dashboard");
-  await expect(page.getByRole("heading", { name: "Assurance workspace" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
 
   const status = await page.evaluate(async () => {
     const response = await fetch("/api/auth/logout", {
