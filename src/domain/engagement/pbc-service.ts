@@ -31,8 +31,8 @@ function reason(value: unknown): string {
 
 async function getTestingRequest(transaction: AuthorizedTenantTransaction, pbcRequestId: string) {
   const request = (
-    await transaction.db.execute<{ engagement_id: string; status: string }>(sql`
-      select p.engagement_id, p.status::text
+    await transaction.db.execute<{ engagement_id: string; status: string; requested_by: string }>(sql`
+      select p.engagement_id, p.status::text, p.requested_by
       from pbc_requests p
       join engagements e on e.id = p.engagement_id
       where p.id = ${pbcRequestId}::uuid
@@ -143,6 +143,7 @@ export async function closePbcRequest(transaction: AuthorizedTenantTransaction, 
   const closureReason = reason(input.reason);
   const request = await getTestingRequest(transaction, pbcRequestId);
   if (request.status !== "COMPLETED") throw new PbcCompletionError("Only a completed PBC request can be closed");
+  if (request.requested_by === transaction.principal.userId) throw new PbcCompletionError("PBC requester cannot independently close the same request");
   await transaction.db.execute(sql`update pbc_requests set status = 'CLOSED', updated_at = now() where id = ${pbcRequestId}::uuid`);
   await recordDomainChange(transaction, { eventType: "engagement.pbc.closed", aggregateType: "engagement", aggregateId: request.engagement_id, action: "engagement.pbc.close", entityType: "pbc_request", entityId: pbcRequestId, payload: { pbcRequestId, reason: closureReason }, oldValues: { status: request.status }, newValues: { status: "CLOSED" } });
   return { id: pbcRequestId, status: "CLOSED" as const };
