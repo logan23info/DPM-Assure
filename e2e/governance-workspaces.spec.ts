@@ -14,6 +14,8 @@ const REVIEWER_SESSION = "e2e-lifecycle-reviewer-session-abcdefghijklmnopqrstuvw
 
 const cookie = (token: string) => `dpm_session=${token}`;
 
+test.describe.configure({ retries: 0 });
+
 async function post(request: APIRequestContext, path: string, token: string, body: unknown, status = 200) {
   const response = await request.post(path, { headers: { cookie: cookie(token), origin: BASE_URL, "sec-fetch-site": "same-origin" }, data: body });
   expect(response.status(), `${path}: ${await response.text()}`).toBe(status);
@@ -158,7 +160,7 @@ test("privacy, compliance, AI, notifications and audit history preserve governan
 
   await setSession(context, ADMIN_SESSION);
   await page.goto(`/organizations/${ORG}/compliance`);
-  await expect(page.getByRole("heading", { name: "Compliance profiles" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Compliance profiles", level: 1 })).toBeVisible();
   await expect(page.getByText("E2E-PROD-20260924 India controller", { exact: true })).toBeVisible();
   await expect(page.getByText("APPLICABLE", { exact: true })).toBeVisible();
 });
