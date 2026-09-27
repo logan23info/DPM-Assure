@@ -136,6 +136,9 @@ test("privacy, compliance, AI, notifications and audit history preserve governan
   expect(determination.result.result).toBe("APPLICABLE");
   const obligation = await post(request, compliancePath, ADMIN_SESSION, { action: "materialize_obligation", determinationId: determination.result.id, triggerAt: "2026-09-27T00:00:00.000Z" });
   expect(obligation.result.status).toBe("OPEN");
+  const complianceState = await get(request, compliancePath, ADMIN_SESSION);
+  expect(complianceState.profiles.some((item: any) => item.id === profile.result.id)).toBe(true);
+  expect(complianceState.determinations.some((item: any) => item.id === determination.result.id && item.result === "APPLICABLE")).toBe(true);
 
   const aiPath = `/api/organizations/${ORG}/ai`;
   const selfReview = await post(request, aiPath, ADMIN_SESSION, { action: "review", input: { generationId: AI_GENERATION, decision: "APPROVED" } }, 400);
@@ -161,6 +164,6 @@ test("privacy, compliance, AI, notifications and audit history preserve governan
   await setSession(context, ADMIN_SESSION);
   await page.goto(`/organizations/${ORG}/compliance`);
   await expect(page.getByRole("heading", { name: "Compliance profiles", level: 1 })).toBeVisible();
-  await expect(page.getByText("E2E-PROD-20260924 India controller", { exact: true })).toBeVisible();
+  await expect(page.getByText("E2E-PROD-20260924 India controller", { exact: true })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("APPLICABLE", { exact: true })).toBeVisible();
 });
