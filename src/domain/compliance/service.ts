@@ -9,6 +9,7 @@ import {
   complianceProfileFacts,
   complianceProfiles,
   obligationInstances,
+  obligationRules,
 } from "@/db/obligation-schema";
 import { recordDomainChange } from "@/domain/record-event";
 
@@ -28,6 +29,33 @@ export async function listComplianceProfiles(transaction: AuthorizedTenantTransa
     .from(complianceProfiles)
     .where(eq(complianceProfiles.organizationId, transaction.context.organizationId))
     .orderBy(asc(complianceProfiles.name));
+}
+
+export async function listComplianceProfileFacts(transaction: AuthorizedTenantTransaction) {
+  requirePermission(transaction.membership.role, permissions.complianceRead);
+  return transaction.db
+    .select()
+    .from(complianceProfileFacts)
+    .where(eq(complianceProfileFacts.organizationId, transaction.context.organizationId))
+    .orderBy(asc(complianceProfileFacts.factKey));
+}
+
+export async function listObligationRules(transaction: AuthorizedTenantTransaction) {
+  requirePermission(transaction.membership.role, permissions.complianceRead);
+  return transaction.db
+    .select()
+    .from(obligationRules)
+    .where(eq(obligationRules.status, "ACTIVE"))
+    .orderBy(asc(obligationRules.ruleKey), asc(obligationRules.version));
+}
+
+export async function listApplicabilityDeterminations(transaction: AuthorizedTenantTransaction) {
+  requirePermission(transaction.membership.role, permissions.complianceRead);
+  return transaction.db
+    .select()
+    .from(applicabilityDeterminations)
+    .where(eq(applicabilityDeterminations.organizationId, transaction.context.organizationId))
+    .orderBy(asc(applicabilityDeterminations.evaluatedAt));
 }
 
 export async function createComplianceProfile(
