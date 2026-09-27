@@ -164,6 +164,6 @@ test("privacy, compliance, AI, notifications and audit history preserve governan
   await setSession(context, ADMIN_SESSION);
   await page.goto(`/organizations/${ORG}/compliance`);
   await expect(page.getByRole("heading", { name: "Compliance profiles", level: 1 })).toBeVisible();
-  await expect(page.getByText("E2E-PROD-20260924 India controller", { exact: true })).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText("APPLICABLE", { exact: true })).toBeVisible();
+  await expect(page.locator("article.data-row").getByText("E2E-PROD-20260924 India controller", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".signal-card .role-badge").getByText("APPLICABLE", { exact: true })).toBeVisible();
 });
