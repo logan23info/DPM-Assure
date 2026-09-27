@@ -80,15 +80,17 @@ jobs:
       - name: Start private S3-compatible evidence store
         run: |
           set -euo pipefail
-          docker run -d --name dpm-minio -p 9000:9000 \
-            -e MINIO_ROOT_USER="$OBJECT_STORE_ACCESS_KEY_ID" \
-            -e MINIO_ROOT_PASSWORD="$OBJECT_STORE_SECRET_ACCESS_KEY" \
-            quay.io/minio/minio server /data
-          for i in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then break; fi
+          docker run -d --name dpm-evidence-store -p 127.0.0.1:9000:9000 \
+            -v dpm-evidence-data:/data \
+            -e RUSTFS_ACCESS_KEY="$OBJECT_STORE_ACCESS_KEY_ID" \
+            -e RUSTFS_SECRET_KEY="$OBJECT_STORE_SECRET_ACCESS_KEY" \
+            -e RUSTFS_CONSOLE_ENABLE=false \
+            rustfs/rustfs@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff /data
+          for i in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:9000/health/ready >/dev/null; then break; fi
             sleep 1
           done
-          curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null
+          curl --fail --silent http://127.0.0.1:9000/health/ready >/dev/null
           node --input-type=module <<'NODE'
           import { CreateBucketCommand, S3Client } from '@aws-sdk/client-s3';
           const s3 = new S3Client({
@@ -210,4 +212,6 @@ jobs:
 
       - name: Show server logs on failure
         if: failure()
-        run: cat /tmp/dpm-e2e.log || true
+        run: |
+          docker logs dpm-evidence-store || true
+          cat /tmp/dpm-e2e.log || true
