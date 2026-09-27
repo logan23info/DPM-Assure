@@ -1,29 +1,25 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useState } from "react";
 
 type Profile = { id: string; name: string; jurisdiction: string; status: string };
 type Fact = { id: string; profileId: string; factKey: string; factValue: string; sourceReference: string };
 type Rule = { id: string; ruleKey: string; version: number; jurisdiction: string; triggerType: string; offsetValue: number; offsetUnit: string; conditionFacts: Record<string, string> };
-type Determination = { id: string; profileId: string; obligationRuleId: string; result: string; rationale: string; evaluatedAt: string };
-type Obligation = { id: string; applicabilityDeterminationId: string; dueAt: string; triggerAt: string; status: string; sourceReference: string };
-type Payload = { profiles: Profile[]; facts: Fact[]; rules: Rule[]; determinations: Determination[]; obligations: Obligation[] };
+type Determination = { id: string; profileId: string; obligationRuleId: string; result: string; rationale: string; evaluatedAt: string | Date };
+type Obligation = { id: string; applicabilityDeterminationId: string; dueAt: string | Date; triggerAt: string | Date; status: string; sourceReference: string };
+export type CompliancePayload = { profiles: Profile[]; facts: Fact[]; rules: Rule[]; determinations: Determination[]; obligations: Obligation[] };
 
-export function ComplianceClient({ organizationId, canManage }: { organizationId: string; canManage: boolean }) {
-  const [data, setData] = useState<Payload | null>(null);
-  const [message, setMessage] = useState("Loading compliance profiles…");
+export function ComplianceClient({ organizationId, canManage, initialData }: { organizationId: string; canManage: boolean; initialData: CompliancePayload }) {
+  const [data, setData] = useState<CompliancePayload>(initialData);
+  const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     const response = await fetch(`/api/organizations/${organizationId}/compliance`, { cache: "no-store" });
-    const body = await response.json() as Payload & { message?: string };
+    const body = await response.json() as CompliancePayload & { message?: string };
     if (!response.ok) throw new Error(body.message ?? "Compliance profiles could not be loaded");
     setData(body);
   }, [organizationId]);
-
-  useEffect(() => {
-    load().then(() => setMessage("")).catch((error: Error) => setMessage(error.message));
-  }, [load]);
 
   async function submit(event: FormEvent<HTMLFormElement>, action: string) {
     event.preventDefault();
@@ -49,11 +45,11 @@ export function ComplianceClient({ organizationId, canManage }: { organizationId
     }
   }
 
-  const profiles = data?.profiles ?? [];
-  const facts = data?.facts ?? [];
-  const rules = data?.rules ?? [];
-  const determinations = data?.determinations ?? [];
-  const obligations = data?.obligations ?? [];
+  const profiles = data.profiles;
+  const facts = data.facts;
+  const rules = data.rules;
+  const determinations = data.determinations;
+  const obligations = data.obligations;
 
   return <div className="admin-stack">
     <p className="form-message" role="status">{message}</p>
