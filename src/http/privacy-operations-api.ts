@@ -137,7 +137,7 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
       try {
         if (!UUID.test(organizationId)) throw new Error("organizationId must be a UUID");
         const principal = await requireAuthenticatedPrincipal(resolver);
-        return withAuthorizedTenantTransaction(
+        return await withAuthorizedTenantTransaction(
           { principal, organizationId, requestId: crypto.randomUUID(), permission: permissions.privacyRead },
           async (tx) => json({
             clients: await tx.db.select({ id: clients.id, name: clients.name }).from(clients)
@@ -189,7 +189,7 @@ export function createPrivacyOperationsApi(resolver: SessionResolver) {
         const principal = await requireAuthenticatedPrincipal(resolver);
         const body = await request.json() as Record<string, unknown>;
 
-        return withAuthorizedTenantTransaction(
+        return await withAuthorizedTenantTransaction(
           { principal, organizationId, requestId: crypto.randomUUID(), permission: permissions.privacyRead },
           async (tx) => {
             switch (requiredText(body, "action")) {

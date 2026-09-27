@@ -137,7 +137,8 @@ jobs:
             ('f1000000-0000-4000-8000-000000000013','e2e-other@example.test','E2E Other','ACTIVE'),
             ('f1000000-0000-4000-8000-000000000014','e2e-manager@example.test','E2E Audit Manager','ACTIVE'),
             ('f1000000-0000-4000-8000-000000000015','e2e-reviewer@example.test','E2E Reviewer','ACTIVE'),
-            ('f1000000-0000-4000-8000-000000000016','e2e-pbc-client@example.test','E2E PBC Client','ACTIVE');
+            ('f1000000-0000-4000-8000-000000000016','e2e-pbc-client@example.test','E2E PBC Client','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000017','e2e-super-admin@example.test','E2E Super Admin','ACTIVE');
 
           INSERT INTO memberships(organization_id,user_id,role,status) VALUES
             ('f1000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000011','ORG_ADMIN','ACTIVE'),
@@ -145,7 +146,8 @@ jobs:
             ('f1000000-0000-4000-8000-000000000002','f1000000-0000-4000-8000-000000000013','ORG_ADMIN','ACTIVE'),
             ('f1000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000014','AUDIT_MANAGER','ACTIVE'),
             ('f1000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000015','REVIEWER','ACTIVE'),
-            ('f1000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000016','CLIENT','ACTIVE');
+            ('f1000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000016','CLIENT','ACTIVE'),
+            ('f1000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000017','SUPER_ADMIN','ACTIVE');
 
           INSERT INTO clients(id,organization_id,name,status) VALUES
             ('f2000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000001','E2E Assurance Client','ACTIVE');
@@ -163,12 +165,22 @@ jobs:
           INSERT INTO control_requirement_mappings(control_id,requirement_id,relationship,coverage,rationale,source_reference,reviewer_id,reviewed_at,effective_at) VALUES
             ('f3000000-0000-4000-8000-000000000005','f3000000-0000-4000-8000-000000000004','IMPLEMENTS','FULL','The E2E audit criterion operationalizes the source-backed evidence-integrity requirement.','E2E-OFFICIAL-1:E2E-1','f1000000-0000-4000-8000-000000000015',now(),now());
 
+          INSERT INTO obligation_rules(id,rule_key,version,requirement_id,source_id,jurisdiction,trigger_type,offset_value,offset_unit,condition_facts,effective_at,rationale,validated_by) VALUES
+            ('f3000000-0000-4000-8000-000000000006','E2E-BREACH-DEADLINE',1,'f3000000-0000-4000-8000-000000000004','f3000000-0000-4000-8000-000000000001','IN','BREACH_DETECTED',72,'HOURS','{"ENTITY_ROLE":"CONTROLLER"}'::jsonb,'2026-01-01T00:00:00Z','E2E source-backed deadline rule','f1000000-0000-4000-8000-000000000011');
+
+          INSERT INTO notifications(id,organization_id,recipient_user_id,event_type,title,body) VALUES
+            ('f4000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000011','e2e.release_gate','E2E governance verification','Synthetic notification for browser release verification.');
+
+          INSERT INTO ai_generations(id,organization_id,source_type,source_reference,prompt_version,model_provider,model_name,input_hash,output,confidence,review_status,created_by) VALUES
+            ('f4000000-0000-4000-8000-000000000002','f1000000-0000-4000-8000-000000000001','DOCUMENT_SUMMARY','["E2E-OFFICIAL-1"]','DPM-AI-1','e2e-fixture','e2e-model',repeat('a',64),'{"evidence_status":"SOURCE_BACKED","summary":"Synthetic source-backed AI output for review boundary verification."}'::jsonb,0.9000,'AI_REVIEW_PENDING','f1000000-0000-4000-8000-000000000011');
+
           INSERT INTO auth_sessions(user_id,token_hash,expires_at) VALUES
             ('f1000000-0000-4000-8000-000000000011',encode(digest('e2e-admin-session-token-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours'),
             ('f1000000-0000-4000-8000-000000000012',encode(digest('e2e-client-session-token-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours'),
             ('f1000000-0000-4000-8000-000000000011',encode(digest('e2e-lifecycle-admin-session-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours'),
             ('f1000000-0000-4000-8000-000000000015',encode(digest('e2e-lifecycle-reviewer-session-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours'),
-            ('f1000000-0000-4000-8000-000000000016',encode(digest('e2e-lifecycle-client-session-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours');
+            ('f1000000-0000-4000-8000-000000000016',encode(digest('e2e-lifecycle-client-session-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours'),
+            ('f1000000-0000-4000-8000-000000000017',encode(digest('e2e-governance-super-session-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '2 hours');
 
           INSERT INTO auth_login_tokens(email,token_hash,expires_at) VALUES
             ('e2e-admin@example.test',encode(digest('e2e-magic-link-token-abcdefghijklmnopqrstuvwxyz1234567890','sha256'),'hex'),now()+interval '1 hour');

@@ -34,8 +34,10 @@ export default async function OrganizationLayout({ children, params }: LayoutPro
     ] },
     { label: "Privacy assurance", items: [
       { href: `${root}/privacy`, label: "Privacy operations", icon: "privacy" },
+      { href: `${root}/compliance`, label: "Compliance profiles", icon: "governance", exact: true },
       { href: `${root}/compliance/monitoring`, label: "Compliance monitoring", icon: "monitoring" },
       { href: `${root}/notifications`, label: "Notifications", icon: "bell" },
+      ...(hasPermission(membership.role, permissions.auditLogRead) ? [{ href: `${root}/audit-log`, label: "Audit history", icon: "audit" as const }] : []),
     ] },
     ...(hasPermission(membership.role, permissions.aiUse) ? [{ label: "Advisory", items: [
       { href: `${root}/ai`, label: "AI assistance", icon: "ai" as const },
