@@ -28,16 +28,14 @@ export async function GET(request: Request, context: RouteContext) {
     const authenticated = await principal(request);
     const result = await withAuthorizedTenantTransaction(
       { principal: authenticated, organizationId, requestId: crypto.randomUUID(), permission: permissions.complianceRead },
-      async (transaction) => {
-        const [profiles, facts, rules, determinations, obligations] = await Promise.all([
-          listComplianceProfiles(transaction),
-          listComplianceProfileFacts(transaction),
-          listObligationRules(transaction),
-          listApplicabilityDeterminations(transaction),
-          listOpenObligations(transaction),
-        ]);
-        return { profiles, facts, rules, determinations, obligations };
-      },
+      async (transaction) => ({
+        // Keep tenant reads ordered on the transaction's single database connection.
+        profiles: await listComplianceProfiles(transaction),
+        facts: await listComplianceProfileFacts(transaction),
+        rules: await listObligationRules(transaction),
+        determinations: await listApplicabilityDeterminations(transaction),
+        obligations: await listOpenObligations(transaction),
+      }),
     );
     return Response.json(result);
   } catch (error) {
